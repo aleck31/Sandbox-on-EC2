@@ -9,7 +9,7 @@ requires-python = ">=3.11"
 
 dependencies = [
     "boto3>=1.26.0",
-    "botocore>=1.29.0",
+    "strands-agents",
     "pathlib2>=2.3.0",
     "typing-extensions>=4.0.0",
 ]
@@ -19,7 +19,4 @@ dev = [
     "black>=22.0.0",
     "flake8>=5.0.0",
     "mypy>=1.0.0",
-]
-strands = [
-    "strands-agents",
 ]

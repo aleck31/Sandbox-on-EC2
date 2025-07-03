@@ -8,7 +8,7 @@ import json
 import os
 from typing import Dict, Any, Optional
 from pathlib import Path
-from ec2_sandbox_tool import SandboxConfig
+from ec2_sandbox import SandboxConfig
 
 
 class ConfigManager:

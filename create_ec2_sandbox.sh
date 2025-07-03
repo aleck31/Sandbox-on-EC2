@@ -448,7 +448,7 @@ generate_config() {
     "instance_os": "Ubuntu 24.04 LTS",
     "access_method": "SSM + EIC"
   },
-  "ec2-sandbox": {
+  "default": {
     "instance_id": "$instance_id",
     "region": "$region",
     "aws_profile": "$profile",

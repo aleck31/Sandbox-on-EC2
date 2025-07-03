@@ -13,9 +13,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config_manager import ConfigManager
-from ec2_sandbox_tool import EC2SandboxTool, create_strands_tool
+from ec2_sandbox import EC2SandboxEnv
+from strands_tools import create_strands_tools
 
-def create_test_config():
+def load_test_config():
     """从配置文件动态加载测试配置"""
     try:
         # 查找配置文件
@@ -25,7 +26,7 @@ def create_test_config():
         
         # 使用配置管理器加载配置
         manager = ConfigManager(config_path)
-        config = manager.get_config('ec2-sandbox')  # 使用正确的环境名称
+        config = manager.get_config('default')  # 使用正确的环境名称
         
         # 调整测试参数（保持原有配置，只调整测试相关的）
         original_execution_time = config.max_execution_time
@@ -49,8 +50,9 @@ def test_basic_execution():
     """测试基础代码执行"""
     print("=== 测试基础代码执行 ===")
     
-    config = create_test_config()
-    sandbox = EC2SandboxTool(config)
+    config = load_test_config()
+    sandbox_env = EC2SandboxEnv(config)
+    sandbox = sandbox_env.create_sandbox_instance("test_basic")
     
     # 简单Python测试
     code = """
@@ -65,7 +67,6 @@ print(f"2 + 2 = {result}")
         result = sandbox.execute_code(
             code=code,
             runtime="python3",
-            session_id="test_basic",
             create_filesystem=True
         )
         
@@ -87,8 +88,9 @@ def test_file_operations():
     """测试文件操作"""
     print("\n=== 测试文件操作 ===")
     
-    config = create_test_config()
-    sandbox = EC2SandboxTool(config)
+    config = load_test_config()
+    sandbox_env = EC2SandboxEnv(config)
+    sandbox = sandbox_env.create_sandbox_instance("test_files")
     
     # 准备测试文件
     files = {
@@ -129,7 +131,6 @@ print("Files created successfully!")
         result = sandbox.execute_code(
             code=code,
             runtime="python3",
-            session_id="test_files",
             files=files,
             create_filesystem=True
         )
@@ -148,8 +149,9 @@ def test_environment_variables():
     """测试环境变量"""
     print("\n=== 测试环境变量 ===")
     
-    config = create_test_config()
-    sandbox = EC2SandboxTool(config)
+    config = load_test_config()
+    sandbox_env = EC2SandboxEnv(config)
+    sandbox = sandbox_env.create_sandbox_instance("test_env")
     
     env_vars = {
         "TEST_VAR": "test_value",
@@ -180,7 +182,6 @@ print(f"Boolean: {bool_val}")
         result = sandbox.execute_code(
             code=code,
             runtime="python3",
-            session_id="test_env",
             env_vars=env_vars,
             create_filesystem=True
         )
@@ -198,8 +199,9 @@ def test_nodejs_execution():
     """测试Node.js执行"""
     print("\n=== 测试Node.js执行 ===")
     
-    config = create_test_config()
-    sandbox = EC2SandboxTool(config)
+    config = load_test_config()
+    sandbox_env = EC2SandboxEnv(config)
+    sandbox = sandbox_env.create_sandbox_instance("test_nodejs")
     
     code = """
 console.log('Node.js test started');
@@ -231,7 +233,6 @@ console.log('Result saved to nodejs_result.json');
         result = sandbox.execute_code(
             code=code,
             runtime="node",
-            session_id="test_node",
             create_filesystem=True
         )
         
@@ -251,8 +252,9 @@ def test_bash_execution():
     """测试Bash执行"""
     print("\n=== 测试Bash执行 ===")
     
-    config = create_test_config()
-    sandbox = EC2SandboxTool(config)
+    config = load_test_config()
+    sandbox_env = EC2SandboxEnv(config)
+    sandbox = sandbox_env.create_sandbox_instance("test_bash")
     
     code = """
 echo "Bash test started"
@@ -284,7 +286,6 @@ echo "Bash test completed"
         result = sandbox.execute_code(
             code=code,
             runtime="bash",
-            session_id="test_bash",
             create_filesystem=True
         )
         
@@ -301,8 +302,9 @@ def test_error_handling():
     """测试错误处理"""
     print("\n=== 测试错误处理 ===")
     
-    config = create_test_config()
-    sandbox = EC2SandboxTool(config)
+    config = load_test_config()
+    sandbox_env = EC2SandboxEnv(config)
+    sandbox = sandbox_env.create_sandbox_instance("test_error")
     
     # 测试语法错误
     bad_code = """
@@ -315,7 +317,6 @@ print("This won't be reached")
         result = sandbox.execute_code(
             code=bad_code,
             runtime="python3",
-            session_id="test_error",
             create_filesystem=True
         )
         
@@ -336,9 +337,10 @@ def test_resource_limits():
     print("\n=== 测试资源限制 ===")
     
     # 使用较短的超时时间进行测试
-    config = create_test_config()
+    config = load_test_config()
     config.max_execution_time = 30  # 30秒超时
-    sandbox = EC2SandboxTool(config)
+    sandbox_env = EC2SandboxEnv(config)
+    sandbox = sandbox_env.create_sandbox_instance("test_short")
     
     # 测试一个会成功完成的短任务
     short_code = """
@@ -353,7 +355,6 @@ print("Operation completed successfully")
         result = sandbox.execute_code(
             code=short_code,
             runtime="python3",
-            session_id="test_short",
             create_filesystem=True
         )
         execution_time = time.time() - start_time
@@ -374,8 +375,8 @@ def test_strands_integration():
     print("\n=== 测试Strands集成 ===")
     
     try:
-        config = create_test_config()
-        tools = create_strands_tool(config)
+        config = load_test_config()
+        tools = create_strands_tools(config)
         
         # 测试工具创建
         print(f"创建了 {len(tools)} 个工具")
@@ -383,12 +384,12 @@ def test_strands_integration():
             print(f"  {i+1}. {tool.__name__}")
         
         # 测试工具调用
-        ec2_code_execution = tools[0]
+        code_execution_tool = tools[0]
         
-        result_json = ec2_code_execution(
+        result_json = code_execution_tool(
             code="print('Strands integration test')\nprint(f'Result: {2**10}')",
             runtime="python3",
-            session_id="strands_test"
+            task_id="strands_test"
         )
         
         result_dict = json.loads(result_json)
@@ -409,10 +410,10 @@ def test_instance_status():
     print("\n=== 测试实例状态检查 ===")
     
     try:
-        config = create_test_config()
-        sandbox = EC2SandboxTool(config)
+        config = load_test_config()
+        sandbox_env = EC2SandboxEnv(config)
         
-        status = sandbox.check_instance_status()
+        status = sandbox_env.check_instance_status()
         print(f"实例状态: {json.dumps(status, indent=2, default=str)}")
         
         return 'error' not in status

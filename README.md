@@ -105,14 +105,15 @@ cp config_template.json config.json
 
 ```python
 from config_manager import ConfigManager
-from ec2_sandbox_tool import EC2SandboxTool
+from ec2_sandbox import EC2SandboxEnv
 
 # 从配置文件加载配置
 manager = ConfigManager('config.json')
 config = manager.get_config('default')  # 或其他环境名
 
 # 创建沙箱工具
-sandbox = EC2SandboxTool(config)
+sandbox_env = EC2SandboxEnv(config)
+sandbox = sandbox_env.create_sandbox_instance("your_task_id")
 
 # 执行Python代码
 result = sandbox.execute_code(
@@ -180,8 +181,7 @@ uv run python config_manager.py --template
 - **development**: 开发环境（资源限制较小，快速清理）
 - **production**: 生产环境（资源充足，长期保留）
 - **data-science**: 数据科学专用（大内存，长执行时间）
-- **web-development**: Web开发专用（Node.js优化）
-- **education**: 教育培训专用（严格资源限制）
+- **web-development**: Web开发专用（Node.js优化）s
 
 ### 环境变量覆盖
 
@@ -296,7 +296,7 @@ content = sandbox.get_task_files(result.task_hash, filename="result.json")
 
 ## 工具函数
 
-### ec2_code_execution
+### code_execution_tool
 在EC2沙箱中执行代码
 
 **参数:**
@@ -307,20 +307,20 @@ content = sandbox.get_task_files(result.task_hash, filename="result.json")
 - `env_vars`: 环境变量字典
 - `create_filesystem`: 是否创建独立文件系统
 
-### ec2_get_files
+### get_files_tool
 获取任务目录中的文件内容
 
 **参数:**
 - `task_hash`: 任务hash值
 - `filename`: 特定文件名（可选）
 
-### ec2_cleanup_tasks
+### cleanup_tasks_tool
 清理过期的任务目录
 
 **参数:**
 - `hours`: 清理多少小时前的任务
 
-### ec2_instance_status
+### sandbox_env_status
 检查EC2实例状态
 
 ## 故障排除

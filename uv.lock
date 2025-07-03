@@ -671,8 +671,8 @@ version = "1.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "boto3" },
-    { name = "botocore" },
     { name = "pathlib2" },
+    { name = "strands-agents" },
     { name = "typing-extensions" },
 ]
 
@@ -682,22 +682,18 @@ dev = [
     { name = "flake8" },
     { name = "mypy" },
 ]
-strands = [
-    { name = "strands-agents" },
-]
 
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=22.0.0" },
     { name = "boto3", specifier = ">=1.26.0" },
-    { name = "botocore", specifier = ">=1.29.0" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "pathlib2", specifier = ">=2.3.0" },
-    { name = "strands-agents", marker = "extra == 'strands'" },
+    { name = "strands-agents" },
     { name = "typing-extensions", specifier = ">=4.0.0" },
 ]
-provides-extras = ["dev", "strands"]
+provides-extras = ["dev"]
 
 [[package]]
 name = "six"
