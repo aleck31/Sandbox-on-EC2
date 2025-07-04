@@ -277,7 +277,7 @@ content = sandbox.get_task_files(result.task_hash, filename="result.json")
 
 ## 基于EC2沙箱的工具
 
-### code_execution_tool
+### execute_code_in_sandbox
 在EC2沙箱中执行代码
 
 **参数:**
@@ -292,21 +292,21 @@ content = sandbox.get_task_files(result.task_hash, filename="result.json")
 - 最大支持70KB代码（基于AWS SSM实际测试）
 - 超长代码会收到详细的优化建议
 
-### get_files_tool
+### get_task_files
 获取任务目录中的文件内容
 
 **参数:**
 - `task_hash`: 任务hash值
 - `filename`: 特定文件名（可选）
 
-### cleanup_tasks_tool
+### cleanup_expired_tasks
 清理过期的任务目录
 
 **参数:**
 - `hours`: 清理多少小时前的任务
 
-### sandbox_env_status
-检查EC2实例状态
+### check_sandbox_status
+检查沙盒环境(EC2实例)状态
 
 ## 故障排除
 

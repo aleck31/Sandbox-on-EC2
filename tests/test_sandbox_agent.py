@@ -22,10 +22,10 @@ def test_basic_functionality():
         
         # 创建工具
         tools = create_strands_tools(config)
-        code_execution_tool = tools[0]
+        execute_code_in_sandbox = tools[0]
         
         # 测试代码执行
-        result = code_execution_tool(
+        result = execute_code_in_sandbox(
             code="print('Hello from test!')\nresult = 2 + 2\nprint(f'2 + 2 = {result}')",
             runtime="python3",
             task_id="test_basic"
@@ -67,8 +67,7 @@ def test_agent_integration():
             # 简单测试
             print("🤖 测试Agent响应...")
             # 使用一个必须通过代码计算才能得出的复杂问题
-            complex_question = """
-请计算以下数学问题：
+            complex_question = """请计算以下数学问题：
 1. 生成斐波那契数列的前20项
 2. 计算这20项的平方和
 3. 找出其中所有的质数
@@ -77,7 +76,7 @@ def test_agent_integration():
 
 这个问题需要多步计算，请用Python代码完成。
 """
-            print(f"📑 {complex_question}")
+            print(f"📋 {complex_question}")
             agent(complex_question)
             print("✅ Agent集成测试通过")
             # 响应内容已经自动显示，不需要额外打印
@@ -99,11 +98,11 @@ def test_code_length_limit():
         config_manager = ConfigManager('config.json')
         config = config_manager.get_config('default')
         tools = create_strands_tools(config)
-        code_execution_tool = tools[0]
+        execute_code_in_sandbox = tools[0]
         
         # 测试超长代码
         long_code = "print('test')\n" + "#" * 80000  # 80KB
-        result = code_execution_tool(
+        result = execute_code_in_sandbox(
             code=long_code,
             runtime="python3",
             task_id="test_long"
@@ -131,11 +130,11 @@ def test_file_operations():
         config_manager = ConfigManager('config.json')
         config = config_manager.get_config('default')
         tools = create_strands_tools(config)
-        code_execution_tool = tools[0]
-        get_files_tool = tools[1]
+        execute_code_in_sandbox = tools[0]
+        get_task_files = tools[1]
         
         # 执行代码生成文件
-        code_result = code_execution_tool(
+        code_result = execute_code_in_sandbox(
             code="""
 import json
 data = {"test": "file operations", "number": 42}
@@ -154,7 +153,7 @@ print("File created successfully")
             task_hash = result_dict['task_hash']
             
             # 获取文件
-            files_result = get_files_tool(task_hash=task_hash)
+            files_result = get_task_files(task_hash=task_hash)
             files_dict = json.loads(files_result)
             
             if 'test_file.json' in files_dict:

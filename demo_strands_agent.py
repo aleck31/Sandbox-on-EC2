@@ -26,16 +26,16 @@ def create_coding_assistant():
 你是一个专业的编程助手，能够帮助用户编写和执行代码。
 
 你拥有以下工具：
-1. code_execution_tool - 在EC2沙箱中执行代码（支持Python、Node.js、Bash等）
-2. get_files_tool - 获取任务生成的文件内容
-3. cleanup_tasks_tool - 清理过期的任务目录
-4. sandbox_env_status - 检查EC2沙箱环境状态
+1. execute_code_in_sandbox - 在EC2沙箱中执行代码（支持Python、Node.js、Bash等）
+2. get_task_files - 获取任务生成的文件内容
+3. cleanup_expired_tasks - 清理过期的任务目录
+4. check_sandbox_status - 检查EC2沙箱环境状态
 
 当用户提出编程请求时，请：
 1. 理解用户需求
 2. 选择合适的编程语言和运行时
-3. 使用 code_execution_tool 编写并执行代码
-4. 如果需要，使用 get_files_tool 获取生成的文件内容
+3. 使用 execute_code_in_sandbox 编写并执行代码
+4. 如果需要，使用 get_task_files 获取生成的文件内容
 5. 分析结果并向用户解释
 
 你可以处理各种编程任务：数据分析、文件操作、数学计算、Web开发等。
@@ -71,7 +71,7 @@ def demo_python_execution():
     config_manager = ConfigManager('config.json')
     config = config_manager.get_config('default')
     tools = create_strands_tools(config)
-    code_execution_tool = tools[0]  # 第一个工具是代码执行工具
+    execute_code_in_sandbox = tools[0]  # 第一个工具是代码执行工具
     
     python_code = """
 import random
@@ -108,7 +108,7 @@ print("结果已保存到 statistics_result.json")
 """
     
     print("🔄 正在执行Python代码...")
-    result = code_execution_tool(
+    result = execute_code_in_sandbox(
         code=python_code,
         runtime="python3",
         task_id="python_demo"
@@ -124,7 +124,7 @@ def demo_nodejs_execution():
     config_manager = ConfigManager('config.json')
     config = config_manager.get_config('default')
     tools = create_strands_tools(config)
-    code_execution_tool = tools[0]
+    execute_code_in_sandbox = tools[0]
     
     nodejs_code = """
 const fs = require('fs');
@@ -171,7 +171,7 @@ console.log(`邮箱域名: ${uniqueDomains.join(', ')}`);
 """
     
     print("🔄 正在执行Node.js代码...")
-    result = code_execution_tool(
+    result = execute_code_in_sandbox(
         code=nodejs_code,
         runtime="node",
         task_id="nodejs_demo"
@@ -187,11 +187,11 @@ def demo_file_operations():
     config_manager = ConfigManager('config.json')
     config = config_manager.get_config('default')
     tools = create_strands_tools(config)
-    get_files_tool = tools[1]  # 第二个工具是文件获取工具
+    get_task_files = tools[1]  # 第二个工具是文件获取工具
     
     print("先执行Python代码生成文件...")
     # 先执行一个简单的Python代码生成文件
-    code_execution_tool = tools[0]
+    execute_code_in_sandbox = tools[0]
     simple_code = """
 import json
 
@@ -207,7 +207,7 @@ with open('demo_file.json', 'w') as f:
 print("文件已创建: demo_file.json")
 """
     
-    code_result = code_execution_tool(
+    code_result = execute_code_in_sandbox(
         code=simple_code,
         runtime="python3",
         task_id="file_demo"
@@ -223,12 +223,12 @@ print("文件已创建: demo_file.json")
         
         if task_hash:
             print(f"\n📋 获取生成的文件 (task_hash: {task_hash})...")
-            files_result = get_files_tool(task_hash=task_hash)
+            files_result = get_task_files(task_hash=task_hash)
             print("文件内容:")
             print(files_result)
             
             print(f"\n📋 获取特定文件 (demo_file.json)...")
-            specific_file = get_files_tool(task_hash=task_hash, filename="demo_file.json")
+            specific_file = get_task_files(task_hash=task_hash, filename="demo_file.json")
             print("特定文件内容:")
             print(specific_file)
         else:
@@ -246,10 +246,10 @@ def demo_status_check():
     config_manager = ConfigManager('config.json')
     config = config_manager.get_config('default')
     tools = create_strands_tools(config)
-    sandbox_env_status = tools[3]  # 第四个工具是状态检查工具
+    check_sandbox_status = tools[3]  # 第四个工具是状态检查工具
     
     print("🔄 检查沙箱环境状态...")
-    result = sandbox_env_status()
+    result = check_sandbox_status()
     print("📋 环境状态:")
     print(result)
     """演示直接使用工具"""
@@ -261,10 +261,10 @@ def demo_status_check():
     tools = create_strands_tools(config)
     
     # 获取各个工具
-    code_execution_tool = tools[0]
-    get_files_tool = tools[1] 
-    cleanup_tasks_tool = tools[2]
-    sandbox_env_status = tools[3]
+    execute_code_in_sandbox = tools[0]
+    get_task_files = tools[1] 
+    cleanup_expired_tasks = tools[2]
+    check_sandbox_status = tools[3]
     
     # 1. 执行Python代码
     print("\n📋 1. 执行Python代码演示")
@@ -303,7 +303,7 @@ with open('sales_report.json', 'w') as f:
 print("报告已保存到 sales_report.json")
 """
     
-    result = code_execution_tool(
+    result = execute_code_in_sandbox(
         code=python_code,
         runtime="python3",
         task_id="sales_analysis"
@@ -313,13 +313,13 @@ print("报告已保存到 sales_report.json")
     
     # 2. 获取生成的文件
     print("\n📋 2. 获取生成的文件")
-    files_result = get_files_tool(task_hash="sales_analysis")
+    files_result = get_task_files(task_hash="sales_analysis")
     print("文件内容:")
     print(files_result)
     
     # 3. 检查环境状态
     print("\n📋 3. 检查环境状态")
-    status_result = sandbox_env_status()
+    status_result = check_sandbox_status()
     print("环境状态:")
     print(status_result)
 

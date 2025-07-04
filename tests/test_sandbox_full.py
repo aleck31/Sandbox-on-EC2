@@ -384,9 +384,9 @@ def test_strands_integration():
             print(f"  {i+1}. {tool.__name__}")
         
         # 测试工具调用
-        code_execution_tool = tools[0]
+        execute_code_in_sandbox = tools[0]
         
-        result_json = code_execution_tool(
+        result_json = execute_code_in_sandbox(
             code="print('Strands integration test')\nprint(f'Result: {2**10}')",
             runtime="python3",
             task_id="strands_test"

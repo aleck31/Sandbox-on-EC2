@@ -17,7 +17,7 @@ def test_code_length_check():
     config_manager = ConfigManager('config.json')
     config = config_manager.get_config('default')
     tools = create_strands_tools(config)
-    code_execution_tool = tools[0]
+    execute_code_in_sandbox = tools[0]
     
     print("🧪 测试代码长度检查功能")
     
@@ -31,7 +31,7 @@ result = sum(range(100))
 print(f"Sum: {result}")
 """
     
-    result = code_execution_tool(
+    result = execute_code_in_sandbox(
         code=normal_code,
         runtime="python3",
         task_id="test_normal"
@@ -47,7 +47,7 @@ print(f"Sum: {result}")
     base_code = "print('Long code test')\n"
     long_code = base_code + "#" * (80 * 1024 - len(base_code))
     
-    result = code_execution_tool(
+    result = execute_code_in_sandbox(
         code=long_code,
         runtime="python3", 
         task_id="test_long"
@@ -63,7 +63,7 @@ print(f"Sum: {result}")
     print("\n3️⃣ 测试边界代码 (70KB)")
     boundary_code = base_code + "#" * (70 * 1024 - len(base_code))
     
-    result = code_execution_tool(
+    result = execute_code_in_sandbox(
         code=boundary_code,
         runtime="python3",
         task_id="test_boundary"

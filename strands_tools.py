@@ -23,7 +23,7 @@ def create_strands_tools(config: SandboxConfig) -> List[Callable[..., str]]:
     sandbox_env = EC2SandboxEnv(config)
     
     @tool
-    def code_execution_tool(
+    def execute_code_in_sandbox(
         code: str,
         runtime: str = "python3",
         task_id: Optional[str] = None,
@@ -106,7 +106,7 @@ def create_strands_tools(config: SandboxConfig) -> List[Callable[..., str]]:
             return json.dumps(asdict(error_result), indent=2, ensure_ascii=False)
     
     @tool
-    def get_files_tool(task_hash: str, filename: Optional[str] = None) -> str:
+    def get_task_files(task_hash: str, filename: Optional[str] = None) -> str:
         """
         获取任务目录中的文件内容
         
@@ -124,7 +124,7 @@ def create_strands_tools(config: SandboxConfig) -> List[Callable[..., str]]:
             return json.dumps({"error": str(e)}, ensure_ascii=False)
     
     @tool
-    def cleanup_tasks_tool(hours: Optional[int] = None) -> str:
+    def cleanup_expired_tasks(hours: Optional[int] = None) -> str:
         """
         清理过期的任务目录
         
@@ -141,7 +141,7 @@ def create_strands_tools(config: SandboxConfig) -> List[Callable[..., str]]:
             return f"清理失败: {str(e)}"
     
     @tool
-    def sandbox_env_status() -> str:
+    def check_sandbox_status() -> str:
         """
         检查Sandbox底层环境(EC2实例)状态
         
@@ -158,10 +158,10 @@ def create_strands_tools(config: SandboxConfig) -> List[Callable[..., str]]:
     tools_list = []
     
     # 添加工具到列表
-    tools_list.append(code_execution_tool)
-    tools_list.append(get_files_tool)
-    tools_list.append(cleanup_tasks_tool)
-    tools_list.append(sandbox_env_status)
+    tools_list.append(execute_code_in_sandbox)
+    tools_list.append(get_task_files)
+    tools_list.append(cleanup_expired_tasks)
+    tools_list.append(check_sandbox_status)
     
     return tools_list
 
@@ -200,8 +200,8 @@ if __name__ == "__main__":
             print(f"  {i}. {tool.__name__}")
             
         # 测试工具调用
-        code_execution_tool = tools[0]
-        result = code_execution_tool(
+        execute_code_in_sandbox = tools[0]
+        result = execute_code_in_sandbox(
             code="print('Hello from Strands integration!')\nprint(f'123 x 456 = {123 x 456}')",
             runtime="python3",
             task_id="strands_test"
