@@ -1,6 +1,6 @@
 [project]
 name = "sandbox-on-ec2"
-version = "1.0.0"
+version = "1.5.0"
 description = "基于EC2实例的代码执行沙箱工具，为AI Agents提供云端代码执行能力"
 readme = "README.md"
 license = {text = "MIT"}
