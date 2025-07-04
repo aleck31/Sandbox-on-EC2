@@ -4,7 +4,7 @@
     "1": "Copy this template to config.json and modify as needed",
     "2": "Replace placeholder values with your actual AWS resources",
     "3": "Choose authentication method: aws_profile OR access_key_id/secret_access_key",
-    "4": "Add session_token for temporary credentials (STS)"
+    "4": "Optional: session_token for temporary credentials (STS)"
   },
   "example_aws_profile": {
     "instance_id": "i-YOUR_INSTANCE_ID_HERE",

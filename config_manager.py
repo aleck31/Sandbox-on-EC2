@@ -8,7 +8,7 @@ import json
 import os
 from typing import Dict, Any, Optional
 from pathlib import Path
-from ec2_sandbox import SandboxConfig
+from ec2_sandbox.core import SandboxConfig
 
 
 class ConfigManager:
@@ -120,74 +120,31 @@ class ConfigManager:
         }
         
         for field, (min_val, max_val) in numeric_fields.items():
-            value = config_dict.get(field, 0)
-            if not isinstance(value, int) or value < min_val or value > max_val:
+            value = config_dict.get(field)
+            if value is not None and (not isinstance(value, int) or value < min_val or value > max_val):
                 errors.append(f"'{field}' must be an integer between {min_val} and {max_val}")
         
         # 检查运行时
-        allowed_runtimes = config_dict.get('allowed_runtimes', [])
-        if not allowed_runtimes:
-            errors.append("'allowed_runtimes' cannot be empty")
-        
-        valid_runtimes = ["python3", "python", "node", "bash", "sh"]
-        invalid_runtimes = [rt for rt in allowed_runtimes if rt not in valid_runtimes]
-        if invalid_runtimes:
-            errors.append(f"Invalid runtimes: {invalid_runtimes}. Valid: {valid_runtimes}")
+        allowed_runtimes = config_dict.get('allowed_runtimes')
+        if allowed_runtimes is not None:  # 只在明确指定时验证
+            valid_runtimes = ["python3", "python", "node", "bash", "sh"]
+            invalid_runtimes = [rt for rt in allowed_runtimes if rt not in valid_runtimes]
+            if invalid_runtimes:
+                errors.append(f"Invalid runtimes: {invalid_runtimes}. Valid: {valid_runtimes}")
         
         if errors:
             raise ValueError("Configuration validation failed:\n" + "\n".join(f"  - {error}" for error in errors))
     
     def get_auth_method(self, environment: str = "default") -> str:
-        """获取认证方式"""
+        """获取认证方式（用于查询）"""
         config_dict = self._configs.get(environment, {})
         
         if config_dict.get('aws_profile'):
             return "profile"
         elif config_dict.get('access_key_id') and config_dict.get('secret_access_key'):
-            if config_dict.get('session_token'):
-                return "temporary_credentials"
-            else:
-                return "access_keys"
+            return "access_keys" + (" + token" if config_dict.get('session_token') else "")
         else:
             return "unknown"
-    
-    def create_config_template(self, output_file: str = "config_template.json") -> None:
-        """创建配置模板文件"""
-        template = {
-            "_comment": "EC2 Sandbox Configuration Template",
-            "_instructions": {
-                "1": "Copy this template to config.json and modify as needed",
-                "2": "Replace placeholder values with your actual AWS resources",
-                "3": "Choose authentication method: aws_profile OR access_key_id/secret_access_key",
-                "4": "Add session_token for temporary credentials (STS)"
-            },
-            "default": {
-                "instance_id": "i-YOUR_INSTANCE_ID_HERE",
-                "region": "us-east-1",
-                "aws_profile": "default",
-                "base_sandbox_dir": "/tmp/sandbox",
-                "max_execution_time": 300,
-                "max_memory_mb": 1024,
-                "cleanup_after_hours": 24,
-                "allowed_runtimes": ["python3", "python", "node", "bash", "sh"]
-            },
-            "example_with_keys": {
-                "instance_id": "i-YOUR_INSTANCE_ID_HERE",
-                "region": "us-west-2",
-                "access_key_id": "YOUR_ACCESS_KEY_ID",
-                "secret_access_key": "YOUR_SECRET_ACCESS_KEY",
-                "base_sandbox_dir": "/tmp/sandbox",
-                "max_execution_time": 300,
-                "max_memory_mb": 1024,
-                "cleanup_after_hours": 24,
-                "allowed_runtimes": ["python3", "python", "node", "bash", "sh"]
-            }
-        }
-        
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(template, f, indent=2, ensure_ascii=False)
-        
-        print(f"Configuration template created: {output_file}")
 
 
 def main():
@@ -200,16 +157,10 @@ def main():
     parser.add_argument("--validate", "-v", help="Validate specific environment configuration")
     parser.add_argument("--show", "-s", help="Show configuration for specific environment")
     parser.add_argument("--auth", "-a", help="Show authentication method for environment")
-    parser.add_argument("--template", "-t", action="store_true", help="Create configuration template")
     
     args = parser.parse_args()
     
     try:
-        if args.template:
-            manager = ConfigManager.__new__(ConfigManager)  # 不调用__init__
-            manager.create_config_template()
-            return
-        
         manager = ConfigManager(args.config)
         
         if args.list:
