@@ -335,8 +335,9 @@ def demo_agent_interaction():
     
     # 预设问题
     questions = [
-        "请用Python创建一个简单的数据分析脚本，分析一组销售数据并生成报告",
-        "检查当前沙箱环境的状态"
+        "检查当前沙箱环境的状态",
+        "生成斐波那契数列的前17项, 计算这17项的平方和",
+        "请用Python创建一个简单的数据分析脚本, 分析一组销售数据并生成报告",
     ]
     
     for i, question in enumerate(questions, 1):
@@ -345,7 +346,7 @@ def demo_agent_interaction():
         
         try:
             response = agent(question)
-            print(f"🤖 Agent响应:\n{response}")
+            # print(f"🤖 Agent响应:\n{response}")
         except Exception as e:
             print(f"❌ 处理问题时出错: {e}")
             import traceback

@@ -326,23 +326,17 @@ create_ec2_instance() {
     # 创建安全组
     local sg_id=$(create_security_group)
     
-    # 创建用户数据脚本 - 适配Ubuntu 24.04
-    cat > /tmp/user-data.sh << 'EOF'
-#!/bin/bash
-apt-get update -y
-apt-get install -y python3 python3-pip python3-venv nodejs npm curl wget jq unzip
-pip3 install --break-system-packages requests boto3 pandas numpy
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-./aws/install
-rm -rf aws awscliv2.zip
-snap install amazon-ssm-agent --classic
-systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
-systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
-mkdir -p /tmp/sandbox /tmp/dev-sandbox
-chmod 755 /tmp/sandbox /tmp/dev-sandbox
-echo "EC2 Sandbox setup completed" > /var/log/sandbox-setup.log
-EOF
+    # 检查用户数据脚本是否存在
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local user_data_script="$script_dir/user-data.sh"
+    
+    if [ ! -f "$user_data_script" ]; then
+        log_error "用户数据脚本不存在: $user_data_script"
+        log_info "请确保 user-data.sh 文件存在于脚本目录中"
+        exit 1
+    fi
+    
+    log_info "使用用户数据脚本: $user_data_script"
     
     log_info "创建EC2实例..."
     
@@ -353,9 +347,9 @@ EOF
         --instance-type $instance_type \
         --security-group-ids $sg_id \
         --iam-instance-profile Name=EC2SandboxRole \
-        --user-data file:///tmp/user-data.sh \
+        --user-data file://$user_data_script \
         --metadata-options "HttpTokens=required,HttpPutResponseHopLimit=2,HttpEndpoint=enabled" \
-        --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$instance_name},{Key=Purpose,Value=Sandbox},{Key=OS,Value=Ubuntu-24.04},{Key=Access,Value=SSM-EIC}]" \
+        --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$instance_name},{Key=Purpose,Value=Sandbox},{Key=OS,Value=Ubuntu-24.04},{Key=Access,Value=SSM-EIC},{Key=DataAnalysis,Value=Enabled}]" \
         --query 'Instances[0].InstanceId' \
         --output text)
     
@@ -425,9 +419,6 @@ EOF
     echo ""
     echo "SSM连接命令:"
     echo "  aws ssm start-session --target $instance_id"
-    
-    # 清理临时文件
-    rm -f /tmp/user-data.sh
 }
 
 # 生成配置文件
@@ -444,7 +435,7 @@ generate_config() {
   "_comment": "EC2 Sandbox Configuration - Auto-generated",
   "_generated": {
     "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-    "script_version": "1.0.0",
+    "script_version": "1.2.0",
     "instance_os": "Ubuntu 24.04 LTS",
     "access_method": "SSM + EIC"
   },
@@ -557,6 +548,7 @@ main() {
                 echo "  - 通过SSM Session Manager和EC2 Instance Connect访问"
                 echo "  - 安全组仅允许EIC访问SSH端口"
                 echo "  - 预装Python 3、Node.js和常用开发工具"
+                echo "  - 预装完整的数据分析库 (pandas, matplotlib, plotly, scipy等)"
                 echo
                 echo "示例:"
                 echo "  $0                                    # 使用默认设置"
