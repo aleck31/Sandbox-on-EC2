@@ -9,7 +9,9 @@ import logging
 from typing import Optional, Dict
 from dataclasses import asdict
 from strands import tool
-from ec2_sandbox import EC2SandboxEnv, SandboxConfig, ExecutionResult
+from ec2_sandbox.core import EC2SandboxEnv, SandboxConfig
+from ec2_sandbox.sandbox import ExecutionResult
+
 
 logger = logging.getLogger(__name__)
 

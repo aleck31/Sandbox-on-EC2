@@ -1,5 +1,9 @@
+#!/usr/bin/env python3
+"""
+简单测试: 验证EC2沙盒基础功能
+"""
+
 import json
-import time
 import os
 import sys
 from dataclasses import dataclass, asdict
@@ -8,7 +12,7 @@ from dataclasses import dataclass, asdict
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config_manager import ConfigManager
-from ec2_sandbox import EC2SandboxEnv, SandboxConfig
+from ec2_sandbox.core import EC2SandboxEnv, SandboxConfig
 
 
 def load_test_config():
