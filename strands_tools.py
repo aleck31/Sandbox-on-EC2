@@ -32,25 +32,24 @@ def create_strands_tools(config: SandboxConfig) -> List[Callable[..., str]]:
         create_filesystem: bool = True
     ) -> str:
         """
-        在EC2沙箱中执行代码
+        在EC2沙箱中安全执行代码(最大代码长度: 70KB)
         
         Args:
-            code: 要执行的代码
-            runtime: 运行时环境 (python3, python, node, bash, sh)
-            task_id: 任务ID，用于标识任务
+            code: 要执行的代码 (必需)
+            runtime: 运行时环境，可选值: "python3"(默认), "python", "node", "bash", "sh"
+            task_id: 任务ID, 用于标识任务
             files: 需要创建的文件 {filename: content}
-            env_vars: 环境变量 {key: value}
-            create_filesystem: 是否创建独立的文件系统
+            env_vars: 可选的环境变量 {key: value}
+            create_filesystem: 是否创建独立文件系统 (默认: True)
             
         Returns:
             执行结果的JSON字符串
         """
         try:
-            # 检查代码长度 - 基于精确测试的AWS SSM限制
+            # 检查代码长度
             code_size = len(code.encode('utf-8'))
-            # 精确测试结果：74KB代码成功，74.5KB失败
             # 设置安全限制为70KB，为各种情况留出余量
-            MAX_CODE_SIZE = 71680  # 70KB安全限制
+            MAX_CODE_SIZE = 71680
             
             if code_size > MAX_CODE_SIZE:
                 error_result = ExecutionResult(

@@ -100,8 +100,16 @@ class SandboxInstance:
                 try:
                     encoded_code = base64.b64encode(code.encode('utf-8')).decode('ascii')
                     exec_commands.extend([
+                        "set +e",  # 不要在错误时退出
                         f"echo '{encoded_code}' | base64 -d > {code_file}",
-                        f"timeout {self.environment.config.max_execution_time} {runtime} {code_file}"
+                        "echo '=== EXECUTION START ==='",
+                        f"timeout {self.environment.config.max_execution_time} {runtime} {code_file} 2>&1",
+                        "exit_code=$?",
+                        "echo '=== EXECUTION END ==='",
+                        "echo \"EXIT_CODE: $exit_code\"",
+                        "echo '--- FILES_CREATED ---'",
+                        "ls -la 2>/dev/null || true",
+                        "exit 0"  # 确保总是成功退出SSM命令
                     ])
                 except Exception as e:
                     raise ValueError(f"Failed to encode Python code: {e}")
@@ -111,8 +119,16 @@ class SandboxInstance:
                 try:
                     encoded_code = base64.b64encode(code.encode('utf-8')).decode('ascii')
                     exec_commands.extend([
+                        "set +e",
                         f"echo '{encoded_code}' | base64 -d > {code_file}",
-                        f"timeout {self.environment.config.max_execution_time} node {code_file}"
+                        "echo '=== EXECUTION START ==='",
+                        f"timeout {self.environment.config.max_execution_time} node {code_file} 2>&1",
+                        "exit_code=$?",
+                        "echo '=== EXECUTION END ==='",
+                        "echo \"EXIT_CODE: $exit_code\"",
+                        "echo '--- FILES_CREATED ---'",
+                        "ls -la 2>/dev/null || true",
+                        "exit 0"
                     ])
                 except Exception as e:
                     raise ValueError(f"Failed to encode Node.js code: {e}")
@@ -138,6 +154,31 @@ class SandboxInstance:
             stdout = result['stdout']
             stderr = result['stderr']
             
+            # 检查实际的执行状态
+            actual_success = True
+            actual_return_code = 0
+            execution_output = stdout
+            execution_error = stderr
+            
+            # 从输出中提取实际的退出码
+            if 'EXIT_CODE:' in stdout:
+                exit_code_lines = [line for line in stdout.split('\n') if 'EXIT_CODE:' in line]
+                if exit_code_lines:
+                    try:
+                        actual_return_code = int(exit_code_lines[0].split(':')[-1].strip())
+                        actual_success = (actual_return_code == 0)
+                    except ValueError:
+                        pass
+            
+            # 提取实际的执行输出（在标记之间的内容）
+            if '=== EXECUTION START ===' in stdout and '=== EXECUTION END ===' in stdout:
+                start_marker = '=== EXECUTION START ==='
+                end_marker = '=== EXECUTION END ==='
+                start_idx = stdout.find(start_marker)
+                end_idx = stdout.find(end_marker)
+                if start_idx != -1 and end_idx != -1:
+                    execution_output = stdout[start_idx + len(start_marker):end_idx].strip()
+            
             # 提取创建的文件列表
             files_created = []
             if '--- FILES_CREATED ---' in stdout:
@@ -147,15 +188,15 @@ class SandboxInstance:
             execution_time = time.time() - start_time
             
             return ExecutionResult(
-                success=result['status'] == 'Success' and result['return_code'] == 0,
-                stdout=stdout,
-                stderr=stderr,
-                return_code=result['return_code'],
+                success=actual_success,
+                stdout=execution_output,  # 使用清理后的输出
+                stderr=execution_error,
+                return_code=actual_return_code,
                 execution_time=execution_time,
                 working_directory=working_dir,
                 files_created=files_created,
                 task_hash=self.task_hash,
-                error_message=stderr if stderr else None
+                error_message=execution_output if not actual_success else None  # 错误时返回输出作为错误信息
             )
             
         except Exception as e:
