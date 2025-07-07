@@ -12,6 +12,7 @@ dependencies = [
     "strands-agents",
     "pathlib2>=2.3.0",
     "typing-extensions>=4.0.0",
+    "gradio>=5.35.0",
 ]
 
 [project.optional-dependencies]
