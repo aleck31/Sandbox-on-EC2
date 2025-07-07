@@ -22,6 +22,7 @@ apt-get install -y \
     python3-numpy \
     python3-matplotlib \
     python3-plotly \
+    python3-seaborn \
     python3-scipy \
     python3-requests \
     python3-openpyxl \
@@ -49,7 +50,7 @@ echo "AWS CLI version: $(aws --version)"
 
 echo "🧪 Testing core data analysis libraries..."
 python3 -c "
-libraries = ['pandas', 'numpy', 'matplotlib', 'plotly', 'scipy', 'requests', 'openpyxl', 'bs4', 'lxml']
+libraries = ['pandas', 'numpy', 'matplotlib', 'plotly', 'seaborn', 'scipy', 'requests', 'openpyxl', 'bs4', 'lxml']
 success = 0
 for lib in libraries:
     try:

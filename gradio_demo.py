@@ -8,7 +8,8 @@ import gradio as gr
 from gradio import ChatMessage
 import json
 import time
-from typing import List, Dict, Any, Generator
+import asyncio
+from typing import List, Dict, Any, Generator, Optional
 import logging
 
 from strands import Agent
@@ -25,6 +26,7 @@ class EC2SandboxDemo:
     
     def __init__(self):
         """初始化 Demo"""
+        self.agent: Optional[Agent] = None
         self.setup_agent()
         
     def setup_agent(self):
@@ -78,7 +80,7 @@ class EC2SandboxDemo:
             self.agent = None
     
     def chat_with_agent(self, message: str, history: List[Dict]) -> Generator[ChatMessage, None, None]:
-        """与 Agent 聊天的生成器函数"""
+        """与 Agent 聊天 - 支持流式输出"""
         
         if not self.agent:
             yield ChatMessage(
@@ -87,9 +89,9 @@ class EC2SandboxDemo:
                 metadata={"title": "🚨 系统错误"}
             )
             return
-        
-        # 显示思考状态
-        thinking_msg = ChatMessage(
+
+        # 显示初始状态
+        yield ChatMessage(
             role="assistant",
             content="正在分析您的请求...",
             metadata={
@@ -97,57 +99,120 @@ class EC2SandboxDemo:
                 "status": "pending"
             }
         )
-        yield thinking_msg
-        
+
         try:
-            # 调用 Agent
+           # 使用线程来运行异步代码，实现真正的流式输出
+            import threading
+            import queue
+
             start_time = time.time()
-            response = self.agent(message)
-            duration = time.time() - start_time
+
+            # 创建队列来传递流式数据
+            stream_queue = queue.Queue()
+            exception_container: List[Optional[Exception]] = [None]
             
-            # 更新思考状态为完成
-            thinking_msg.metadata = {
-                "title": "🧠 分析完成",
-                "status": "done",
-                "duration": duration
-            }
-            yield thinking_msg
+            def async_stream_worker():
+                """在独立线程中运行异步流式处理"""
+                loop = None
+                try:
+                    # 创建新的事件循环
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    async def stream_handler():
+                        try:
+                            if self.agent is None:
+                                stream_queue.put("❌ Agent 未正确初始化, 请检查配置。")
+                                return
+
+                            full_response = ""
+                            first_chunk = True
+
+                            async for event in self.agent.stream_async(message):
+                                if "data" in event:
+                                    chunk = event["data"]
+                                    
+                                    if first_chunk:
+                                        # 第一个数据块时替换状态消息
+                                        full_response = chunk
+                                        first_chunk = False
+                                    else:
+                                        # 累积后续文本块
+                                        full_response += chunk
+                                    
+                                    # 立即放入队列
+                                    stream_queue.put(full_response)
+                                    
+                        except Exception as e:
+                            logger.error(f"流式处理失败: {e}")
+                            stream_queue.put(f"抱歉，执行过程中遇到错误：\n\n```\n{str(e)}\n```\n\n请尝试重新描述您的需求，或者检查网络连接。")                             
+
+                        finally:
+                            # 发送结束信号
+                            stream_queue.put(None)
+                    
+                    # 运行异步处理
+                    loop.run_until_complete(stream_handler())
+
+                except Exception as e:
+                    exception_container[0] = e
+                    stream_queue.put(None)
+                finally:
+                    if loop is not None:
+                        loop.close()
             
-            # 提取实际的响应内容
-            if isinstance(response, dict):
-                # 如果是字典格式，提取message内容
-                if 'message' in response and 'content' in response['message']:
-                    content_list = response['message']['content']
-                    if isinstance(content_list, list) and len(content_list) > 0:
-                        actual_content = content_list[0].get('text', str(response))
+            # 启动异步处理线程
+            thread = threading.Thread(target=async_stream_worker)
+            thread.daemon = True
+            thread.start()
+            
+            # 实时从队列中获取并输出数据
+            while True:
+                try:
+                    # 等待数据，设置超时避免无限等待
+                    chunk = stream_queue.get(timeout=180)
+                    resp_msg = ChatMessage(
+                        role="assistant",
+                        content=chunk,
+                        metadata={"title": "🔄 正在执行"}
+                    )
+
+                    if chunk is None:
+                        # 收到结束信号
+                        duration = time.time() - start_time
+                        # 更新思考状态为完成
+                        resp_msg.metadata = {
+                            "title": "🧠 分析完成",
+                            "status": "done",
+                            "duration": duration
+                        }
+                        yield resp_msg
+                        break
+
+                    yield resp_msg
+
+                except queue.Empty:
+                    # 超时，检查是否有异常
+                    if exception_container[0]:
+                        yield ChatMessage(
+                            role="assistant",
+                            content=f"处理超时或出现异常: {exception_container[0]}",
+                            metadata={"title": "🚨 错误详情"}
+                        )
+                        break
                     else:
-                        actual_content = str(response)
-                else:
-                    actual_content = str(response)
-            else:
-                # 如果是字符串，直接使用
-                actual_content = str(response)
+                        yield ChatMessage(
+                            role="assistant",
+                            content="处理超时，请重试",
+                            metadata={"title": "🚨 错误详情"}
+                        )
+                        break
             
-            # 显示 Agent 响应
-            yield ChatMessage(
-                role="assistant",
-                content=actual_content,
-                metadata={
-                    "title": "✅ 执行完成",
-                    "duration": duration
-                }
-            )
-            
+            # 等待线程结束
+            thread.join(timeout=30)
+
         except Exception as e:
-            logger.error(f"Agent 调用失败: {e}")
-            
-            # 更新思考状态为错误
-            thinking_msg.metadata = {
-                "title": "❌ 执行失败",
-                "status": "done"
-            }
-            yield thinking_msg
-            
+            logger.error(f"同步包装函数失败: {e}")
             # 显示错误信息
             yield ChatMessage(
                 role="assistant",
@@ -177,13 +242,13 @@ def create_demo():
         - 📁 **文件管理** (自动文件创建和管理)
         """,
         examples=[
-            "用Python创建一个简单的数据分析脚本，分析销售数据并生成报告",
             "写一个Node.js程序计算前20个斐波那契数",
-            "用matplotlib创建一个包含多个子图的数据可视化",
             "创建一个Bash脚本来统计当前目录的文件信息",
+            "用Python创建一个简单的数据分析脚本，分析销售数据并生成报告",
+            "用matplotlib创建一个包含多个子图的数据可视化",
             "用pandas处理CSV数据并生成统计摘要"
         ],
-        # theme=gr.themes.Soft(),
+        theme='soft',
         css="""
         .gradio-container {
             max-width: 1200px !important;
