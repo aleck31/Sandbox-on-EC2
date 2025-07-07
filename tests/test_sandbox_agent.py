@@ -9,7 +9,7 @@ from strands import Agent
 from strands.models.bedrock import BedrockModel
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config_manager import ConfigManager
-from strands_tools import create_strands_tools
+from ec2_sandbox.strands_tools import create_strands_tools
 
 def test_basic_functionality():
     """测试基础功能"""

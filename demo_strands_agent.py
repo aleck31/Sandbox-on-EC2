@@ -7,7 +7,7 @@ Strands Agent + EC2 Sandbox Demo
 from strands import Agent
 from strands.models.bedrock import BedrockModel
 from config_manager import ConfigManager
-from strands_tools import create_strands_tools
+from ec2_sandbox.strands_tools import create_strands_tools
 
 
 def create_coding_assistant():

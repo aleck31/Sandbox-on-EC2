@@ -8,7 +8,7 @@ import sys
 import json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config_manager import ConfigManager
-from strands_tools import create_strands_tools
+from ec2_sandbox.strands_tools import create_strands_tools
 
 
 def test_code_length_check():

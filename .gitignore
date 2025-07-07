@@ -23,6 +23,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.pid
 
 # AWS credentials and config
 .aws/
@@ -52,4 +53,4 @@ tmp/
 
 # Log files
 *.log
-logs/
+logs/*
