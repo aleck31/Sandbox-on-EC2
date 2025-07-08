@@ -54,7 +54,7 @@ def format_file_info(tool_results):
     
     info_lines = []
     for i, result in enumerate(tool_results):
-        info_lines.append(f"**任务 #{i+1}**")
+        info_lines.append(f"**Event #{i+1}**")
         info_lines.append(f"- 📁 任务ID: `{result.get('task_hash', 'N/A')}`")
         info_lines.append(f"- 📂 工作目录: `{result.get('working_directory', 'N/A')}`")
         
@@ -75,6 +75,31 @@ def format_file_info(tool_results):
     
     return "\n".join(info_lines)
 
+# 系统提示词
+SYSTEM_PROMPT = """You are a professional code execution assistant running in a secure EC2 sandbox environment.
+
+🚀 **Your Capabilities:**
+- Execute code safely in an isolated EC2 environment
+- Support multiple runtimes: Python, Node.js, Bash, Shell
+- Pre-installed comprehensive data analysis libraries: pandas, numpy, matplotlib, plotly, scipy, etc.
+- Automatic file management and result presentation
+- 🔍 **Web Search**: Search for latest information, technical documentation, and code examples via Exa AI
+
+💡 **Best Practices:**
+- Write clear, concise code
+- Prioritize pre-installed data analysis libraries
+- Analyze and fix code when encountering errors
+- Provide step-by-step solutions for complex tasks
+- Use search functionality when latest information is needed
+
+🔧 **Available Tools:**
+- execute_code_in_sandbox: Execute code (supports python3, node, bash, sh)
+- get_task_files: Retrieve generated files
+- check_sandbox_status: Check environment status
+- 🌐 Exa Search Tools: Search web content, technical docs, code examples
+
+Please assist users with programming and data analysis tasks in a friendly, professional manner. When latest information or technical documentation is needed, proactively use search functionality."""
+
 class EC2SandboxDemo:
     """EC2 Sandbox Agent Demo 类"""
     
@@ -85,54 +110,76 @@ class EC2SandboxDemo:
         self.setup_agent()
         
     def setup_agent(self):
-        """设置 Agent"""
+        """设置 Agent - 一次性集成所有工具"""
         try:
             # 加载配置
             config_manager = ConfigManager('config.json')
             config = config_manager.get_config('default')
-            
-            # 创建工具
-            tools = create_strands_tools(config)
+
+            # 创建沙盒工具
+            sandbox_tools = create_strands_tools(config)
+            all_tools = sandbox_tools.copy()
             
             # 创建 Bedrock 模型
             bedrock_model = BedrockModel(
                 model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
                 region_name="us-west-2",
                 temperature=0.1,
-                max_tokens=4000
+                max_tokens=8000
             )
+
+            # 设置 MCP 工具
+            self.mcp_client = None
+            try:
+                mcp_settings = config_manager.get_raw_config('mcp_settings')
+                exa_api_key = mcp_settings.get('exa_api_key')
+                
+                if exa_api_key:
+                    from mcp import stdio_client, StdioServerParameters
+                    from strands.tools.mcp import MCPClient
+                    
+                    # 创建本地 stdio MCP 客户端
+                    self.mcp_client = MCPClient(lambda: stdio_client(
+                        StdioServerParameters(
+                            command="npx",
+                            args=["-y", "exa-mcp-server", "--tools=web_search_exa, crawling, wikipedia_search_exa,github_search, company_research,linkedin_search"],
+                            env={"EXA_API_KEY": exa_api_key}
+                        )
+                    ))
+                    
+                    # 一次性获取 MCP 工具
+                    with self.mcp_client:
+                        mcp_tools = self.mcp_client.list_tools_sync()
+                        all_tools = sandbox_tools + mcp_tools
+                        logger.info(f"已集成 {len(mcp_tools)} 个 MCP 工具")
+                else:
+                    logger.warning("MCP设置中未配置Exa API Key")
+            except Exception as e:
+                logger.warning(f"MCP集成失败: {e}")
+                self.mcp_client = None
             
-            # 创建 Agent
+            # 创建包含所有工具的 Agent
             self.agent = Agent(
                 model=bedrock_model,
-                system_prompt="""你是一个专业的代码执行助手，运行在安全的EC2沙盒环境中。
-
-🚀 **你的能力：**
-- 在隔离的EC2环境中安全执行代码
-- 支持Python、Node.js、Bash、Shell多种运行时
-- 预装完整的数据分析库：pandas, numpy, matplotlib, plotly, scipy等
-- 自动文件管理和结果展示
-
-💡 **最佳实践：**
-- 编写清晰、简洁的代码
-- 优先使用预装的数据分析库
-- 遇到错误时分析并修正代码
-- 为复杂任务提供分步骤解决方案
-
-🔧 **可用工具：**
-- execute_code_in_sandbox: 执行代码（支持python3, node, bash, sh）
-- get_task_files: 获取生成的文件
-- check_sandbox_status: 检查环境状态
-
-请始终以友好、专业的方式协助用户完成编程和数据分析任务。""",
-                tools=tools
+                tools=all_tools,
+                system_prompt=SYSTEM_PROMPT
             )
             
-            logger.info("Agent 初始化成功")
+            logger.info(f"Agent 初始化成功，共 {len(all_tools)} 个工具")
             
         except Exception as e:
             logger.error(f"Agent 初始化失败: {e}")
             self.agent = None
+    
+    def clear_file_info(self):
+        """清空文件信息并重置Agent会话历史"""
+        # 清空Agent的消息历史
+        if self.agent and hasattr(self.agent, 'messages'):
+            messages_count = len(self.agent.messages)
+            self.agent.messages = []
+            logger.info(f"已清理{messages_count}条Agent历史消息")
+        
+        return "暂无文件信息"
     
     def get_file_info(self):
         """获取当前文件信息"""
@@ -149,6 +196,15 @@ class EC2SandboxDemo:
     def chat_with_agent(self, message: str, history: List[Dict]) -> Generator[List[gr.ChatMessage], None, None]:
         """与 Agent 聊天 - 支持流式输出"""
         
+        # 输入验证
+        if not message or not message.strip():
+            yield [ChatMessage(
+                role="assistant",
+                content="请输入有效的消息。",
+                metadata={"title": "⚠️ 输入错误"}
+            )]
+            return
+            
         if not self.agent:
             yield [ChatMessage(
                 role="assistant",
@@ -196,20 +252,30 @@ class EC2SandboxDemo:
                             full_response = ""
                             first_chunk = True
 
-                            async for event in self.agent.stream_async(message):
-                                if "data" in event:
-                                    chunk = event["data"]
-                                    
-                                    if first_chunk:
-                                        # 第一个数据块时替换状态消息
-                                        full_response = chunk
-                                        first_chunk = False
-                                    else:
-                                        # 累积后续文本块
-                                        full_response += chunk
-                                    
-                                    # 立即放入队列
-                                    stream_queue.put(full_response)
+                            # 简单直接：如果有 MCP 客户端就在其 context 中执行
+                            if self.mcp_client:
+                                with self.mcp_client:
+                                    async for event in self.agent.stream_async(message):
+                                        if "data" in event:
+                                            chunk = event["data"]
+                                            if first_chunk:
+                                                full_response = chunk
+                                                first_chunk = False
+                                            else:
+                                                full_response += chunk
+                                            stream_queue.put(full_response)
+                            else:
+                                # 没有 MCP，直接执行
+                                async for event in self.agent.stream_async(message):
+                                    if "data" in event:
+                                        chunk = event["data"]
+                                        if first_chunk:
+                                            full_response = chunk
+                                            first_chunk = False
+                                        else:
+                                            # 累积后续文本块
+                                            full_response += chunk
+                                        stream_queue.put(full_response)
                                     
                         except Exception as e:
                             logger.error(f"流式处理失败: {e}")
@@ -246,12 +312,12 @@ class EC2SandboxDemo:
                         # 收到结束信号
                         if last_content:
                             duration = time.time() - start_time
-                            stat_msg.content = f"处理完成。耗时: {duration} \n"
+                            stat_msg.content = f"处理完成。耗时: {duration:.1f}s"
                             stat_msg.metadata = {
                                 "title": "✅ Done",
                                 "status": "done"
                             }
-                            yield [stat_msg, ChatMessage(role="assistant",content=last_content)]
+                            yield [stat_msg, ChatMessage(role="assistant", content=last_content)]
                         break
                     
                     # 正常的流式内容
@@ -262,7 +328,7 @@ class EC2SandboxDemo:
                             "title": "🔄 Processing", 
                             "status": "pending"
                         }
-                        yield [stat_msg, ChatMessage(role="assistant",content=chunk)]
+                        yield [stat_msg, ChatMessage(role="assistant", content=chunk)]
 
                 except queue.Empty:
                     # 超时，检查是否有异常
@@ -305,13 +371,13 @@ def create_demo():
     with gr.Blocks(title="EC2 Sandbox Agent Demo", css=css) as demo:
         gr.Markdown("""
                     # 🚀 EC2 Sandbox Agent Demo
-                    **基于 Strands Agents 构建的代码执行助手！**
+                    **基于 Strands Agents 构建的 AI 智能助手！**
                     
-                    这是一个运行在 AWS EC2 实例上的代码执行环境，支持：
-                    - 🐍 **Python** (pandas, numpy, matplotlib, plotly, scipy等)
+                    本演示使用运行在 AWS EC2 实例上的代码执行环境，支持：
+                    - 🧑‍💻 **Python** (pandas, numpy, matplotlib, plotly, scipy等)
                         - 📊 **数据分析** (预置的数据科学工具栈)
-                    - 🟢 **Node.js** (JavaScript运行时)
-                    - 🐚 **Bash/Shell** (系统脚本)
+                    - 🧑‍💻 **Node.js** (JavaScript运行时)
+                    - 🛠️ **Bash/Shell** (系统脚本)
                     - 📁 **文件管理** (自动文件创建和管理)
                     """)
         with gr.Row():
@@ -361,7 +427,13 @@ def create_demo():
                     outputs=[file_info],
                     show_progress='hidden'
                 )
-    
+                
+                # 监听chatbot clear事件，同时清空文件信息
+                chat_interface.chatbot.clear(
+                    fn=demo_instance.clear_file_info,
+                    outputs=[file_info]
+                )
+
     return demo
 
 def main():

@@ -86,7 +86,7 @@ pip install -r requirements.txt
 
 ```bash
 # 复制配置模板
-cp config_template.json config.json
+cp config.json.template config.json
 
 # 编辑配置文件
 vim config.json
@@ -316,7 +316,7 @@ content = sandbox.get_task_files(result.task_hash, filename="result.json")
    ```
    FileNotFoundError: Configuration file not found: config.json
    ```
-   解决：复制 `config_template.json` 到 `config.json`
+   解决：复制 `config.json.template` 到 `config.json`
 
 2. **配置验证失败**
    ```
@@ -362,7 +362,7 @@ ec2-sandbox-tool/
 ├── pyproject.toml          # uv项目配置和依赖管理
 ├── create_ec2_sandbox.sh   # 沙盒环境自动化准备脚本
 ├── config.json             # 主配置文件
-├── config_template.json    # 配置模板
+├── config.json.template    # 配置模板
 ├── config_manager.py       # 配置管理器
 ├── CONFIG_GUIDE.md         # 详细配置指南
 ├── README.md               # 项目说明文档
@@ -391,7 +391,7 @@ uv run python tests/test_sandbox_agent.py
 查看以下文件获取完整的使用示例：
 
 - `CONFIG_GUIDE.md` - 详细配置指南
-- `config_template.json` - 配置模板
+- `config.json.template` - 配置模板
 - `demo_sandbox.py`     - 沙盒工具功能演示
 - `demo_strands_agent.py`  - Strands Agents工具集成演示
 

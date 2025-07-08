@@ -389,7 +389,7 @@ def main():
     # 检查配置文件
     if not os.path.exists('config.json'):
         print("\n❌ 配置文件 config.json 不存在")
-        print("请先复制 config_template.json 到 config.json 并配置您的实例信息")
+        print("请先复制 config.json.template 到 config.json 并配置您的实例信息")
         return
     
     # 验证配置

@@ -109,7 +109,7 @@ status() {
     if is_running; then
         local pid=$(cat "$PID_FILE")
         echo "✅ 运行中 (PID: $pid)"
-        echo "📍 访问: http://localhost:7860"
+        echo "📍 访问: http://localhost:8086"
         [ -f "$LOG_FILE" ] && echo "📋 日志: tail -f $LOG_FILE"
     else
         echo "❌ 未运行"

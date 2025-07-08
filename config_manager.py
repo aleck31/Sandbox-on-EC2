@@ -41,9 +41,25 @@ class ConfigManager:
         # 过滤掉以下划线开头的注释字段
         return [env for env in self._configs.keys() if not env.startswith('_')]
     
+    def get_raw_config(self, environment: str = "default") -> Dict[str, Any]:
+        """
+        获取指定环境的原始配置字典
+        
+        Args:
+            environment: 环境名称
+            
+        Returns:
+            Dict[str, Any]: 原始配置字典
+        """
+        if environment not in self._configs:
+            available = self.list_environments()
+            raise ValueError(f"Environment '{environment}' not found. Available: {available}")
+        
+        return self._configs[environment].copy()
+    
     def get_config(self, environment: str = "default") -> SandboxConfig:
         """
-        获取指定环境的配置
+        获取指定环境的沙盒配置
         
         Args:
             environment: 环境名称
@@ -51,11 +67,8 @@ class ConfigManager:
         Returns:
             SandboxConfig: 沙箱配置对象
         """
-        if environment not in self._configs:
-            available = self.list_environments()
-            raise ValueError(f"Environment '{environment}' not found. Available: {available}")
-        
-        config_dict = self._configs[environment].copy()
+        # 获取原始配置
+        config_dict = self.get_raw_config(environment)
         
         # 从环境变量覆盖配置（如果存在）
         config_dict = self._merge_env_vars(config_dict)

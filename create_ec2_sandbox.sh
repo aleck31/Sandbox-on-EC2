@@ -5,6 +5,9 @@
 
 set -e
 
+# 脚本目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -110,7 +113,6 @@ check_aws_config() {
 # 创建IAM角色（如果不存在）
 create_iam_role() {
     local role_name="EC2SandboxRole"
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
     log_info "检查IAM角色: $role_name"
     
@@ -122,20 +124,20 @@ create_iam_role() {
     log_info "创建IAM角色: $role_name"
     
     # 检查策略文件是否存在
-    if [ ! -f "$script_dir/policies/trust-policy.json" ]; then
-        log_error "信任策略文件不存在: $script_dir/policies/trust-policy.json"
+    if [ ! -f "$SCRIPT_DIR/policies/trust-policy.json" ]; then
+        log_error "信任策略文件不存在: $SCRIPT_DIR/policies/trust-policy.json"
         exit 1
     fi
     
-    if [ ! -f "$script_dir/policies/sandbox-policy.json" ]; then
-        log_error "沙盒策略文件不存在: $script_dir/policies/sandbox-policy.json"
+    if [ ! -f "$SCRIPT_DIR/policies/sandbox-policy.json" ]; then
+        log_error "沙盒策略文件不存在: $SCRIPT_DIR/policies/sandbox-policy.json"
         exit 1
     fi
     
     # 创建角色
     aws iam create-role \
         --role-name $role_name \
-        --assume-role-policy-document file://$script_dir/policies/trust-policy.json \
+        --assume-role-policy-document file://$SCRIPT_DIR/policies/trust-policy.json \
         --description "Role for EC2 Sandbox" > /dev/null
     
     # 附加SSM托管策略
@@ -148,7 +150,7 @@ create_iam_role() {
     aws iam put-role-policy \
         --role-name $role_name \
         --policy-name "EC2SandboxPolicy" \
-        --policy-document file://$script_dir/policies/sandbox-policy.json
+        --policy-document file://$SCRIPT_DIR/policies/sandbox-policy.json
     
     # 创建实例配置文件
     aws iam create-instance-profile --instance-profile-name $role_name > /dev/null
@@ -326,19 +328,13 @@ create_ec2_instance() {
     # 创建安全组
     local sg_id=$(create_security_group)
     
-    # 检查用户数据脚本是否存在
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local user_data_script="$script_dir/user-data.sh"
-    
-    if [ ! -f "$user_data_script" ]; then
-        log_error "用户数据脚本不存在: $user_data_script"
-        log_info "请确保 user-data.sh 文件存在于脚本目录中"
+    log_info "创建EC2实例..."
+
+    # 检查用户数据脚本
+    if [ ! -f "$SCRIPT_DIR/scripts/user-data.sh" ]; then
+        log_error "用户数据脚本不存在: $SCRIPT_DIR/scripts/user-data.sh"
         exit 1
     fi
-    
-    log_info "使用用户数据脚本: $user_data_script"
-    
-    log_info "创建EC2实例..."
     
     # 启动实例 - 不使用密钥对，通过SSM和EIC访问
     local instance_id=$(aws ec2 run-instances \
@@ -347,7 +343,7 @@ create_ec2_instance() {
         --instance-type $instance_type \
         --security-group-ids $sg_id \
         --iam-instance-profile Name=EC2SandboxRole \
-        --user-data file://$user_data_script \
+        --user-data file://"$SCRIPT_DIR/scripts/user-data.sh" \
         --metadata-options "HttpTokens=required,HttpPutResponseHopLimit=2,HttpEndpoint=enabled" \
         --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$instance_name},{Key=Purpose,Value=Sandbox},{Key=OS,Value=Ubuntu-24.04},{Key=Access,Value=SSM-EIC},{Key=DataAnalysis,Value=Enabled}]" \
         --query 'Instances[0].InstanceId' \

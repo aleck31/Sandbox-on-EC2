@@ -152,7 +152,7 @@ echo "config.json" >> .gitignore
 echo "config_*.json" >> .gitignore
 
 # 使用模板创建配置
-cp config_template.json config.json
+cp config.json.template config.json
 ```
 
 ### 2. 环境分离
@@ -237,9 +237,9 @@ python config_manager.py --template
 ```
 **解决**: 直接复制配置模板文件
 ```bash
-cp config_template.json config.json
+cp config.json.template config.json
 ```
 
 ## 配置模板参考
 
-参考项目根目录下的 `config_template.json` 文件获取完整的配置模板和示例。
+参考项目根目录下的 `config.json.template` 文件获取完整的配置模板和示例。
