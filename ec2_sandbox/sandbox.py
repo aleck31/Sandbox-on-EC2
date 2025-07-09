@@ -4,9 +4,10 @@ EC2 Sandbox 实例管理
 基于EC2实例的代码执行沙盒实例管理
 """
 
+import json
 import time
 import base64
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Optional, List
 from dataclasses import dataclass, asdict
 from .core import EC2SandboxEnv
 from .utils import logger, generate_task_hash, sanitize_env_var, parse_file_list
@@ -24,6 +25,13 @@ class ExecutionResult:
     files_created: List[str]
     task_hash: Optional[str] = None
     error_message: Optional[str] = None
+    # 会话相关字段
+    session_id: Optional[str] = None
+    task_count: Optional[int] = None
+    
+    def to_json(self, indent: int = 2, ensure_ascii: bool = False) -> str:
+        """转换为JSON字符串"""
+        return json.dumps(asdict(self), indent=indent, ensure_ascii=ensure_ascii)
 
 
 class SandboxInstance:

@@ -7,6 +7,8 @@ PID_FILE=".pid"
 LOG_DIR="logs"
 LOG_FILE="$LOG_DIR/webui.log"
 AWS_PROFILE=""
+HOST="0.0.0.0"
+PORT="8086"
 
 # 确保日志目录存在
 mkdir -p "$LOG_DIR"
@@ -41,6 +43,7 @@ start() {
     
     echo "🚀 启动应用..."
     [ -n "$AWS_PROFILE" ] && echo "🔧 AWS Profile: $AWS_PROFILE"
+    echo "🌐 服务地址: http://$HOST:$PORT"
     
     # 设置环境变量
     local env_vars=""
@@ -50,17 +53,17 @@ start() {
     
     # 启动应用
     if [ -n "$env_vars" ]; then
-        nohup env $env_vars uv run python "$APP_FILE" > "$LOG_FILE" 2>&1 &
+        nohup env $env_vars uv run "$APP_FILE" > "$LOG_FILE" 2>&1 &
     else
-        nohup uv run python "$APP_FILE" > "$LOG_FILE" 2>&1 &
+        nohup uv run "$APP_FILE" > "$LOG_FILE" 2>&1 &
     fi
     
     echo $! > "$PID_FILE"
     
-    sleep 2
+    sleep 3
     if is_running; then
         echo "✅ 启动成功 (PID: $(cat "$PID_FILE"))"
-        echo "📍 访问: http://localhost:8086"
+        echo "📍 访问: http://$HOST:$PORT"
         echo "📋 日志: tail -f $LOG_FILE"
     else
         echo "❌ 启动失败，检查日志: $LOG_FILE"
@@ -109,7 +112,7 @@ status() {
     if is_running; then
         local pid=$(cat "$PID_FILE")
         echo "✅ 运行中 (PID: $pid)"
-        echo "📍 访问: http://localhost:8086"
+        echo "📍 访问: http://$HOST:$PORT"
         [ -f "$LOG_FILE" ] && echo "📋 日志: tail -f $LOG_FILE"
     else
         echo "❌ 未运行"

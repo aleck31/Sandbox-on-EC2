@@ -1,0 +1,45 @@
+{
+  "_comment": "EC2 Sandbox Configuration Template",
+  "_instructions": {
+    "1": "Copy this template to config.json and modify as needed",
+    "2": "Replace placeholder values with your actual AWS resources",
+    "3": "Choose authentication method: aws_profile OR access_key_id/secret_access_key",
+    "4": "Optional: session_token for temporary credentials (STS)"
+  },
+  "example_aws_profile": {
+    "instance_id": "i-YOUR_INSTANCE_ID_HERE",
+    "region": "us-east-1",
+    "aws_profile": "default",
+    "base_sandbox_dir": "/tmp/sandbox",
+    "max_execution_time": 60,
+    "max_memory_mb": 1024,
+    "cleanup_after_hours": 24,
+    "allowed_runtimes": [
+      "python3",
+      "python",
+      "node",
+      "bash",
+      "sh"
+    ]
+  },
+  "example_with_keys": {
+    "instance_id": "i-YOUR_INSTANCE_ID_HERE",
+    "region": "us-west-2",
+    "access_key_id": "YOUR_ACCESS_KEY_ID",
+    "secret_access_key": "YOUR_SECRET_ACCESS_KEY",
+    "base_sandbox_dir": "/tmp/sandbox",
+    "max_execution_time": 300,
+    "max_memory_mb": 1024,
+    "cleanup_after_hours": 24,
+    "allowed_runtimes": [
+      "python3",
+      "python",
+      "node",
+      "bash",
+      "sh"
+    ]
+  },
+  "mcp_settings": {
+    "xxx_api_key": "YOUR_API_KEY"
+  }
+}

@@ -17,7 +17,7 @@ from .utils import logger, is_safe_filename, create_aws_client
 
 @dataclass
 class SandboxConfig:
-    """沙箱配置"""
+    """沙盒基础环境配置"""
     instance_id: str
     region: str
     aws_profile: Optional[str] = None
