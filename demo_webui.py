@@ -48,29 +48,40 @@ def extract_tool_results_from_messages(messages):
     
     return tool_results
 
-def format_file_info(tool_results, base_sandbox_dir):
+def format_file_info(tool_results):
     """格式化文件信息显示"""
     if not tool_results:
         return "暂无文件信息"
     
-    info_lines = []
-    first_chat = True
+    # 过滤掉无效的工具结果 - 只保留有工作目录和任务哈希的任务
+    valid_results = []
+    for result in tool_results:
+        # 只保留有效的执行结果（有任务哈希）
+        if task_hash := result.get('task_hash'):
+            valid_results.append(result)
+
+    if not valid_results:
+        return "暂无有效的文件信息"
     
-    for i, result in enumerate(tool_results):
+    info_lines = []
+    session_displayed = False
+    
+    for i, result in enumerate(valid_results):
         # 只在第一次显示会话信息
-        if first_chat:
+        if not session_displayed:
             session_id = result.get('session_id', 'N/A')
             if session_id != 'N/A':
-                info_lines.append(f"**🔗 会话: {session_id}**")
+                info_lines.append(f"**🔗 沙盒执行** (sid:{session_id})")
                 info_lines.append("")  # 空行
-                first_chat = False
+                session_displayed = True
         
         # 任务信息
-        info_lines.append(f"**📋 任务 {i+1}** ID: {result.get('task_hash', 'N/A')}")
+        info_lines.append(f"**📋 任务 {i+1}**")
         
         working_directory = result.get('working_directory', '')
+        task_hash = result.get('task_hash', None)
         # 屏蔽敏感的工作目录路径
-        masked_dir = working_directory.replace(base_sandbox_dir, '~', 1)
+        masked_dir = f"./{task_hash}" if task_hash else "N/A"
         info_lines.append(f"  - 📂 工作目录: `{masked_dir}`")
         
         files_created = result.get('files_created', [])
@@ -126,93 +137,145 @@ class EC2SandboxDemo:
     """EC2 Sandbox Agent Demo 类 - 支持会话管理"""
     
     def __init__(self):
-        """初始化 Demo"""
-        self.agent: Optional[Agent] = None
-        self.session_id: Optional[str] = None
+        """初始化 SandboxDemo"""
         self.session_manager = get_session_manager()
-        self.sandbox_config: Optional[SandboxConfig] = None  # 存储沙盒配置
-        self.mcp_client = None  # MCP 客户端
-        self.setup_agent()
+        self.sandbox_config: Optional[SandboxConfig] = None
+        self.mcp_client = None
+        self.mcp_tools = []  # 存储MCP工具
+        self.user_agents = {}  # 存储每个用户的 Agent 实例
         
-    def setup_agent(self, session_id: Optional[str] = None):
-        """设置 Agent - 支持会话管理"""
+        # 加载配置
+        self.load_config()
+        
+        # 初始化MCP工具（一次性，所有session复用）
+        self.setup_mcp_tools()
+        
+    def load_config(self):
+        """加载配置"""
         try:
-            # 加载配置
             config_manager = ConfigManager('config.json')
             self.sandbox_config = config_manager.get_config('default')
-
-            # 创建或获取会话
-            if session_id:
-                self.session_id = session_id
-            else:
-                self.session_id = self.session_manager.create_session()
+            logger.info("配置加载成功")
+        except Exception as e:
+            logger.error(f"配置加载失败: {e}")
+            raise
+    
+    def setup_mcp_tools(self):
+        """设置MCP工具（一次性初始化，所有session复用）"""
+        try:
+            config_manager = ConfigManager('config.json')
+            mcp_settings = config_manager.get_raw_config('mcp_settings')
+            exa_api_key = mcp_settings.get('exa_api_key')
             
-            logger.info(f"设置Agent - 会话ID: {self.session_id}")
-
-            # 创建支持会话的沙盒工具
-            sandbox_tools = create_strands_tools(self.sandbox_config, self.session_id)
+            if exa_api_key:
+                from mcp import stdio_client, StdioServerParameters
+                from strands.tools.mcp import MCPClient
+                
+                # 创建本地 stdio MCP 客户端
+                self.mcp_client = MCPClient(lambda: stdio_client(
+                    StdioServerParameters(
+                        command="npx",
+                        args=["-y", "exa-mcp-server", "--tools=web_search_exa, crawling, wikipedia_search_exa,github_search, company_research,linkedin_search"],
+                        env={"EXA_API_KEY": exa_api_key}
+                    )
+                ))
+                
+                # 一次性获取 MCP 工具
+                with self.mcp_client:
+                    self.mcp_tools = self.mcp_client.list_tools_sync()
+                    logger.info(f"已集成 {len(self.mcp_tools)} 个 MCP 工具")
+            else:
+                logger.warning("MCP设置中未配置Exa API Key")
+        except Exception as e:
+            logger.warning(f"MCP集成失败: {e}")
+            self.mcp_client = None
+            self.mcp_tools = []
+    
+    def get_or_create_agent_for_session(self, session_id: str) -> Agent:
+        """为指定会话获取或创建 Agent"""
+        if session_id not in self.user_agents:
+            logger.info(f"为会话创建新的 Agent: {session_id}")
+            
+            # 确保 sandbox_config 不为 None
+            if self.sandbox_config is None:
+                raise RuntimeError("沙盒配置未初始化")
+            
+            # 直接使用传入的session_id（即Gradio的session_hash）
+            sandbox_tools = create_strands_tools(self.sandbox_config, session_id)
             all_tools = sandbox_tools.copy()
             
-            # 创建 Bedrock 模型
+            # 添加预初始化的MCP工具
+            if self.mcp_tools:
+                all_tools = sandbox_tools + self.mcp_tools
+                logger.info(f"已集成 {len(self.mcp_tools)} 个 MCP 工具")
+            
+            # 创建BedrockModel
             bedrock_model = BedrockModel(
-                model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+                model_id="us.anthropic.claude-3-5-sonnet-20241022-v2:0",
                 region_name="us-west-2",
                 temperature=0.1,
-                max_tokens=8000
+                max_tokens=4000
             )
-
-            # 设置 MCP 工具
-            self.mcp_client = None
-            try:
-                mcp_settings = config_manager.get_raw_config('mcp_settings')
-                exa_api_key = mcp_settings.get('exa_api_key')
-                
-                if exa_api_key:
-                    from mcp import stdio_client, StdioServerParameters
-                    from strands.tools.mcp import MCPClient
-                    
-                    # 创建本地 stdio MCP 客户端
-                    self.mcp_client = MCPClient(lambda: stdio_client(
-                        StdioServerParameters(
-                            command="npx",
-                            args=["-y", "exa-mcp-server", "--tools=web_search_exa, crawling, wikipedia_search_exa,github_search, company_research,linkedin_search"],
-                            env={"EXA_API_KEY": exa_api_key}
-                        )
-                    ))
-                    
-                    # 一次性获取 MCP 工具
-                    with self.mcp_client:
-                        mcp_tools = self.mcp_client.list_tools_sync()
-                        all_tools = sandbox_tools + mcp_tools
-                        logger.info(f"已集成 {len(mcp_tools)} 个 MCP 工具")
-                else:
-                    logger.warning("MCP设置中未配置Exa API Key")
-            except Exception as e:
-                logger.warning(f"MCP集成失败: {e}")
-                self.mcp_client = None
             
-            # 创建包含所有工具的 Agent
-            self.agent = Agent(
+            # 创建Agent
+            agent = Agent(
                 model=bedrock_model,
-                tools=all_tools,
-                system_prompt=SYSTEM_PROMPT
+                system_prompt=SYSTEM_PROMPT,
+                tools=all_tools
             )
             
+            self.user_agents[session_id] = agent
             logger.info(f"Agent 初始化成功，共 {len(all_tools)} 个工具")
-            
-        except Exception as e:
-            logger.error(f"Agent 初始化失败: {e}")
-            self.agent = None
-    
+        
+        return self.user_agents[session_id]
+
+    def _get_state_emoji(self, state: str) -> str:
+        """根据实例状态返回对应的emoji"""
+        state_emojis = {
+            'running': '🟢',      # 绿色圆点 - 运行中
+            'stopped': '🔴',      # 红色圆点 - 已停止
+            'shutting-down': '🟠', # 橙色圆点 - 关闭中
+            'terminated': '⚫',    # 黑色圆点 - 已终止
+            'rebooting': '🔄',    # 循环箭头 - 重启中
+        }
+        return state_emojis.get(state.lower(), '🟡')  # 默认问号
+
     def get_sandbox_env_info(self):
-        """获取沙盒配置信息"""
+        """获取沙盒环境信息，包括配置和实时状态"""
         if not self.sandbox_config:
             return "沙盒配置未加载"
         
         try:
-            config_info = f"**📦 沙盒环境配置**\n\n"
-            config_info += f"- 🖥️ **实例ID**: `{self.sandbox_config.instance_id}`\n"
-            config_info += f"- 🌍 **区域**: `{self.sandbox_config.region}`\n"
+            config_info = f"**📦 沙盒环境信息**\n\n"
+
+            # 获取实例信息
+            try:
+                from ec2_sandbox.core import EC2SandboxEnv
+                sandbox_env = EC2SandboxEnv(self.sandbox_config)
+                status = sandbox_env.check_instance_status()
+            # 基本配置信息
+                config_info += f"- 🖥️ **实例类型**: `{status.get('instance_type', 'Unknown')}` (`{self.sandbox_config.instance_id}`)\n"
+                config_info += f"- 🌍 **区域**: `{self.sandbox_config.region}`\n"
+                            
+                if 'error' not in status:
+                    state_emoji = self._get_state_emoji(status.get('state', 'unknown'))
+                    # CPU使用率
+                    cpu_info = status.get('cpu_utilization', {})
+                    if 'error' not in cpu_info and 'message' not in cpu_info:
+                        cpu_avg = cpu_info.get('average', 0)
+                        config_info += f"- {state_emoji} **CPU使用率**: {cpu_avg}%（平均）\n"
+                    else:
+                        config_info += f"- ❌ **CPU使用率**: 获取失败\n"
+                else:
+                    config_info += f"- ❌ **状态**: {status.get('error', '获取失败')}\n"
+                    
+            except Exception as e:
+                logger.warning(f"获取实例状态失败: {e}")
+                config_info += f"- ⚠️ **状态**: 无法获取实时信息\n"
+            
+            # 配置信息
+            config_info += f"\n**⚙️ 配置参数**\n"
+            
             # 运行时支持
             if self.sandbox_config.allowed_runtimes:
                 runtimes = ', '.join([f"`{rt}`" for rt in self.sandbox_config.allowed_runtimes])
@@ -223,47 +286,55 @@ class EC2SandboxDemo:
 
             return config_info
         except Exception as e:
-            logger.error(f"获取沙盒配置信息失败: {e}")
-            return "获取沙盒配置信息失败"
+            logger.error(f"获取沙盒环境信息失败: {e}")
+            return "获取沙盒环境信息失败"
     
-    def clear_file_info(self):
+    def clear_chat_status(self, request: gr.Request):
         """清空文件信息并重置Agent会话历史"""
-        # 清空Agent的消息历史
-        if self.agent and hasattr(self.agent, 'messages'):
-            messages_count = len(self.agent.messages)
-            self.agent.messages = []
-            logger.info(f"已清理{messages_count}条Agent历史消息")
-        
-        # 清空会话的对话计数器
-        if self.session_id:
-            self.session_manager.clear_session(self.session_id)
-            logger.info(f"已清空会话对话记录: {self.session_id}")
-        
-        # 返回清空后的会话信息和文件信息
-        return self.get_session_info(), "暂无文件信息"
+        try:
+            session_id = request.session_hash if request else None
+            
+            # 确保 session_id 不为 None
+            if session_id is None:
+                session_id = f"fallback_{int(time.time())}"
+            
+            # 清空Agent历史消息
+            if session_id in self.user_agents:
+                agent = self.user_agents[session_id]
+                if agent and hasattr(agent, 'messages'):
+                    messages_count = len(agent.messages)
+                    agent.messages = []
+                    logger.info(f"已清理{messages_count}条Agent历史消息")
+            
+            # 清空会话的对话计数器
+            self.session_manager.clear_session(session_id)
+            logger.info(f"已清空会话对话记录: {session_id}")
+            
+            # 返回清空后的会话信息和文件信息
+            return self.get_session_info(session_id), "暂无文件信息"
+            
+        except Exception as e:
+            logger.error(f"清空文件信息失败: {e}")
+            return "获取会话信息失败", "清空文件信息失败"
     
-    def get_session_info(self):
-        """获取会话统计信息"""
-        if not self.session_id:
+    def get_session_info(self, session_id: str):
+        """获取当前用户会话的统计信息"""
+        if not session_id:
             return "暂无会话信息"
-        
+
         try:
             session_stats = self.session_manager.get_session_stats()
             current_session = None
             for session in session_stats['sessions']:
-                if session['session_id'] == self.session_id:
+                if session['session_id'] == session_id:
                     current_session = session
                     break
             
             info_parts = []
 
-            # 沙盒环境信息
-            config_info = self.get_sandbox_env_info()
-            info_parts.append(config_info)
-
             # 会话信息
             if current_session:
-                stats_info = f"**🆔 会话信息** (`{self.session_id}`)\n\n"
+                stats_info = f"**🆔 当前会话** (`{session_id}`)\n\n"
                 stats_info += f"- 🕐 **会话时长**: {current_session['age_minutes']:.1f} 分钟\n"
                 stats_info += f"- 📅 **创建时间**: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(current_session['created_at']))}\n"
                 stats_info += f"- 🔄 **最后活动**: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(current_session['last_activity']))}\n"
@@ -277,14 +348,18 @@ class EC2SandboxDemo:
             logger.error(f"获取会话信息失败: {e}")
             return "获取会话信息失败"
     
-    def get_file_info(self):
-        """获取当前文件信息"""
-        if not self.agent or not hasattr(self.agent, 'messages'):
+    def get_file_info(self, session_id: str):
+        """获取当前请求的文件信息"""
+        if not session_id or session_id not in self.user_agents:
+            return "暂无文件信息"
+
+        agent = self.user_agents[session_id]
+        if not agent or not hasattr(agent, 'messages'):
             return "暂无文件信息"
         
         try:
-            tool_results = extract_tool_results_from_messages(self.agent.messages)
-            formatted_info = format_file_info(tool_results, self.sandbox_config.base_sandbox_dir)
+            tool_results = extract_tool_results_from_messages(agent.messages)
+            formatted_info = format_file_info(tool_results)
             
             if not formatted_info or formatted_info.strip() == "":
                 return "暂无文件信息"
@@ -294,12 +369,30 @@ class EC2SandboxDemo:
             logger.error(f"获取文件信息失败: {e}")
             return "获取文件信息失败"
     
-    def refresh_status(self):
-        """刷新会话信息和文件信息"""
-        return self.get_session_info(), self.get_file_info()
+    def initialize_session(self, request: gr.Request):
+        """页面加载时初始化用户会话"""
+        session_id = (request.session_hash if request else None) or f"sid-{int(time.time())}"
 
-    def chat_with_agent(self, message: str, history: List[Dict]) -> Generator[tuple, None, None]:
+        # 确保会话在 session_manager 中存在
+        self.session_manager.get_or_create_session(session_id)
+        logger.info(f"页面加载时初始化会话: {session_id}")
+        
+        return self.get_session_info(session_id)
+    
+    def refresh_status(self, request: gr.Request):
+        """刷新会话信息和文件信息"""
+        session_id = (request.session_hash if request else None) or f"sid-{int(time.time())}"
+
+        return self.get_session_info(session_id), self.get_file_info(session_id)
+
+    def chat_with_agent(self, message: str, history: List[Dict], request: gr.Request) -> Generator[tuple, None, None]:
         """与 Agent 聊天 - 支持流式输出，返回 (聊天消息, 会话信息, 文件信息)"""
+        
+        # 使用 Gradio 的 session_hash 作为 session ID
+        session_id = (request.session_hash if request else None) or f"sid-{int(time.time())}"
+
+        # 为这个会话获取或创建 Agent
+        agent = self.get_or_create_agent_for_session(session_id)
 
         # 输入验证
         if not message or not message.strip():
@@ -307,15 +400,15 @@ class EC2SandboxDemo:
                 role="assistant",
                 content="请输入有效的消息。",
                 metadata={"title": "⚠️ 输入错误"}
-            )], self.get_session_info(), self.get_file_info())
+            )], self.get_session_info(session_id), self.get_file_info(session_id))
             return
             
-        if not self.agent:
+        if not agent:
             yield ([ChatMessage(
                 role="assistant",
                 content="❌ Agent 未正确初始化，请检查配置。",
                 metadata={"title": "🚨 系统错误"}
-            )], self.get_session_info(), self.get_file_info())
+            )], self.get_session_info(session_id), self.get_file_info(session_id))
             return
 
         # 显示初始状态
@@ -327,7 +420,7 @@ class EC2SandboxDemo:
                 "status": "pending"
             }
         )
-        yield ([stat_msg], self.get_session_info(), self.get_file_info())
+        yield ([stat_msg], self.get_session_info(session_id), self.get_file_info(session_id))
 
         try:
            # 使用线程来运行异步代码，实现真正的流式输出
@@ -350,7 +443,7 @@ class EC2SandboxDemo:
                     
                     async def stream_handler():
                         try:
-                            if self.agent is None:
+                            if agent is None:
                                 stream_queue.put("❌ Agent 未正确初始化, 请检查配置。")
                                 return
 
@@ -360,7 +453,7 @@ class EC2SandboxDemo:
                             # 简单直接：如果有 MCP 客户端就在其 context 中执行
                             if self.mcp_client:
                                 with self.mcp_client:
-                                    async for event in self.agent.stream_async(message):
+                                    async for event in agent.stream_async(message):
                                         if "data" in event:
                                             chunk = event["data"]
                                             if first_chunk:
@@ -371,7 +464,7 @@ class EC2SandboxDemo:
                                             stream_queue.put(full_response)
                             else:
                                 # 没有 MCP，直接执行
-                                async for event in self.agent.stream_async(message):
+                                async for event in agent.stream_async(message):
                                     if "data" in event:
                                         chunk = event["data"]
                                         if first_chunk:
@@ -422,7 +515,7 @@ class EC2SandboxDemo:
                                 "title": "✅ Done",
                                 "status": "done"
                             }
-                            yield ([stat_msg, ChatMessage(role="assistant", content=last_content)], self.get_session_info(), self.get_file_info())
+                            yield ([stat_msg, ChatMessage(role="assistant", content=last_content)], self.get_session_info(session_id), self.get_file_info(session_id))
                         break
                     
                     # 正常的流式内容
@@ -433,7 +526,7 @@ class EC2SandboxDemo:
                             "title": "🔄 Processing", 
                             "status": "pending"
                         }
-                        yield ([stat_msg, ChatMessage(role="assistant", content=chunk)], self.get_session_info(), self.get_file_info())
+                        yield ([stat_msg, ChatMessage(role="assistant", content=chunk)], self.get_session_info(session_id), self.get_file_info(session_id))
 
                 except queue.Empty:
                     # 超时，检查是否有异常
@@ -442,14 +535,14 @@ class EC2SandboxDemo:
                             role="assistant",
                             content=f"处理超时或出现异常: {exception_container[0]}",
                             metadata={"title": "🚨 错误详情"}
-                        )], self.get_session_info(), self.get_file_info())
+                        )], self.get_session_info(session_id), self.get_file_info(session_id))
                         break
                     else:
                         yield ([ChatMessage(
                             role="assistant",
                             content="处理超时，请重试",
                             metadata={"title": "🚨 错误详情"}
-                        )], self.get_session_info(), self.get_file_info())
+                        )], self.get_session_info(session_id), self.get_file_info(session_id))
                         break
             
             # 等待线程结束
@@ -462,7 +555,7 @@ class EC2SandboxDemo:
                 role="assistant",
                 content=f"抱歉，执行过程中遇到错误：\n\n```\n{str(e)}\n```\n\n请尝试重新描述您的需求，或者检查网络连接。",
                 metadata={"title": "🚨 错误详情"}
-            )], self.get_session_info(), self.get_file_info())
+            )], self.get_session_info(session_id), self.get_file_info(session_id))
 
 def create_demo():
     """创建 Gradio Demo UI"""
@@ -497,6 +590,21 @@ def create_demo():
                     render=False
                 )
 
+                textbox = gr.Textbox(
+                    placeholder="Type a message here",
+                    submit_btn=True,
+                    stop_btn=True,
+                    render=False
+                )
+
+                sandbox_env_info = gr.Markdown(
+                    label="📦 沙盒环境信息",
+                    show_label=True,
+                    container=True,
+                    value="",
+                    render=False
+                )
+
                 session_info = gr.Markdown(
                     label="📊 会话信息",
                     show_label=True,
@@ -518,35 +626,48 @@ def create_demo():
                     fn=demo_instance.chat_with_agent,
                     type="messages",
                     chatbot=chatbot,
+                    textbox=textbox,
                     additional_outputs=[session_info, file_info],
                     examples=[
                         "写一个Node.js程序计算前21个斐波那契数",
                         "查询最新的AWS区域信息并保存到JSON文件",
                         "创建一个Bash脚本来统计当前目录的文件信息",
-                        "用Python创建一个简单的数据分析脚本, 分析销售数据并生成报告",
                         "用matplotlib创建一个包含多个子图的数据可视化",
-                        "从datasciencedojo Github repo下载Boston房价数据集, 用pandas进行数据分析并生成统计摘要和可视化报告"
+                        "用Python创建一个简单的数据分析脚本, 分析销售数据并生成报告",
+                        "从datasciencedojo Github repo下载Boston房价数据集, 用pandas进行数据分析并生成统计报告"
                     ],
                     theme='soft'
                 )
 
             with gr.Column(scale=1):
+                sandbox_env_info.render()
                 # 添加刷新按钮
                 refresh_btn = gr.Button("🔄 刷新状态(Sandbox)", variant="secondary")
                 session_info.render()
                 file_info.render()
 
-                # 绑定刷新事件
-                refresh_btn.click(
-                    fn=demo_instance.refresh_status,
-                    outputs=[session_info, file_info]
-                )
+            # 绑定刷新事件
+            refresh_btn.click(
+                fn=demo_instance.refresh_status,
+                outputs=[session_info, file_info]
+            )
                 
-                # 监听chatbot clear事件，同时清空文件信息
-                chat_interface.chatbot.clear(
-                    fn=demo_instance.clear_file_info,
-                    outputs=[session_info, file_info]
-                )
+            # 监听chatbot clear事件，同时清空文件信息
+            chat_interface.chatbot.clear(
+                fn=demo_instance.clear_chat_status,
+                outputs=[session_info, file_info]
+            )
+
+            chat_interface.load(
+                fn=demo_instance.get_sandbox_env_info,
+                outputs=[sandbox_env_info]
+            )
+            
+            # 页面加载时初始化会话
+            demo.load(
+                fn=demo_instance.initialize_session,
+                outputs=[session_info]
+            )
 
     return demo
 

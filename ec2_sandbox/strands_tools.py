@@ -30,7 +30,7 @@ def get_session_context() -> Optional[SessionContext]:
     """获取当前会话上下文"""
     return _current_context
 
-def create_strands_tools(config: SandboxConfig, session_id: Optional[str] = None) -> List[Callable[..., str]]:
+def create_strands_tools(config: SandboxConfig, session_id: str) -> List[Callable[..., str]]:
     """创建 Strands 沙盒工具"""
 
     # 创建沙盒环境（单例）

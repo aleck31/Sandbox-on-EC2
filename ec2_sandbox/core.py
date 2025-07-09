@@ -195,27 +195,91 @@ class EC2SandboxEnv:
             }
     
     def check_instance_status(self) -> Dict[str, Any]:
-        """检查EC2实例状态"""
+        """检查EC2实例状态及负载"""
         try:
+            # 获取实例基本信息
             response = self.ec2_client.describe_instances(
                 InstanceIds=[self.config.instance_id]
             )
             
-            if response['Reservations']:
-                instance = response['Reservations'][0]['Instances'][0]
-                return {
-                    'instance_id': instance['InstanceId'],
-                    'state': instance['State']['Name'],
-                    'instance_type': instance['InstanceType'],
-                    'public_ip': instance.get('PublicIpAddress'),
-                    'private_ip': instance.get('PrivateIpAddress'),
-                    'launch_time': instance['LaunchTime'].isoformat()
-                }
-            else:
+            if not response['Reservations']:
                 return {'error': 'Instance not found'}
+            
+            instance = response['Reservations'][0]['Instances'][0]
+            
+            # 基本实例信息
+            status_info = {
+                'instance_id': instance['InstanceId'],
+                'state': instance['State']['Name'],
+                'instance_type': instance['InstanceType'],
+                'public_ip': instance.get('PublicIpAddress'),
+                'private_ip': instance.get('PrivateIpAddress'),
+                'launch_time': instance['LaunchTime'].isoformat()
+            }
+            
+            # 获取CPU使用率（如果实例正在运行）
+            if instance['State']['Name'] == 'running':
+                try:
+                    cpu_utilization = self._get_cpu_utilization()
+                    status_info['cpu_utilization'] = cpu_utilization
+                except Exception as e:
+                    logger.warning(f"获取CPU使用率失败: {e}")
+                    status_info['cpu_utilization'] = {'error': str(e)}
+            else:
+                status_info['cpu_utilization'] = {'message': 'Instance not running'}
+            
+            return status_info
                 
         except Exception as e:
             return {'error': str(e)}
+    
+    def _get_cpu_utilization(self) -> Dict[str, Any]:
+        """获取EC2实例的CPU使用率"""
+        try:
+            import boto3
+            from datetime import datetime, timedelta
+            
+            # 创建CloudWatch客户端
+            cloudwatch = boto3.client('cloudwatch', region_name=self.config.region)
+            
+            # 设置时间范围（最近5分钟）
+            end_time = datetime.utcnow()
+            start_time = end_time - timedelta(minutes=5)
+            
+            # 获取CPU使用率指标
+            response = cloudwatch.get_metric_statistics(
+                Namespace='AWS/EC2',
+                MetricName='CPUUtilization',
+                Dimensions=[
+                    {
+                        'Name': 'InstanceId',
+                        'Value': self.config.instance_id
+                    }
+                ],
+                StartTime=start_time,
+                EndTime=end_time,
+                Period=300,  # 5分钟间隔
+                Statistics=['Average', 'Maximum']
+            )
+            
+            if response['Datapoints']:
+                # 获取最新的数据点
+                latest_datapoint = max(response['Datapoints'], key=lambda x: x['Timestamp'])
+                
+                return {
+                    'average': round(latest_datapoint['Average'], 2),
+                    'maximum': round(latest_datapoint['Maximum'], 2),
+                    'timestamp': latest_datapoint['Timestamp'].isoformat(),
+                    'period_minutes': 5
+                }
+            else:
+                return {
+                    'message': 'No CPU data available (instance may be recently started)',
+                    'period_minutes': 5
+                }
+                
+        except Exception as e:
+            raise Exception(f"CloudWatch API error: {str(e)}")
     
     def cleanup_old_tasks(self, hours: Optional[int] = None):
         """清理过期的任务目录"""

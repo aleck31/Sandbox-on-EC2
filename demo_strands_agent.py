@@ -10,6 +10,8 @@ from config_manager import ConfigManager
 from ec2_sandbox.strands_tools import create_strands_tools
 
 
+SID_DEMO = 'sid-a1b2c3d4e5f'
+
 def create_coding_assistant():
     """创建编程助手Agent"""
     
@@ -19,7 +21,7 @@ def create_coding_assistant():
     config = config_manager.get_config('default')
     
     print("🛠️ 创建Strands工具...")
-    tools = create_strands_tools(config)
+    tools = create_strands_tools(config, SID_DEMO)
     print(f"✅ 创建了 {len(tools)} 个工具")
     
     system_prompt = """
@@ -70,7 +72,7 @@ def demo_python_execution():
     # 初始化工具
     config_manager = ConfigManager('config.json')
     config = config_manager.get_config('default')
-    tools = create_strands_tools(config)
+    tools = create_strands_tools(config, SID_DEMO)
     execute_code_in_sandbox = tools[0]  # 第一个工具是代码执行工具
     
     python_code = """
@@ -123,7 +125,7 @@ def demo_nodejs_execution():
     # 初始化工具
     config_manager = ConfigManager('config.json')
     config = config_manager.get_config('default')
-    tools = create_strands_tools(config)
+    tools = create_strands_tools(config, SID_DEMO)
     execute_code_in_sandbox = tools[0]
     
     nodejs_code = """
@@ -186,7 +188,7 @@ def demo_file_operations():
     # 初始化工具
     config_manager = ConfigManager('config.json')
     config = config_manager.get_config('default')
-    tools = create_strands_tools(config)
+    tools = create_strands_tools(config, SID_DEMO)
     get_task_files = tools[1]  # 第二个工具是文件获取工具
     
     print("先执行Python代码生成文件...")
@@ -245,7 +247,7 @@ def demo_status_check():
     # 初始化工具
     config_manager = ConfigManager('config.json')
     config = config_manager.get_config('default')
-    tools = create_strands_tools(config)
+    tools = create_strands_tools(config, SID_DEMO)
     check_sandbox_status = tools[3]  # 第四个工具是状态检查工具
     
     print("🔄 检查沙箱环境状态...")
@@ -258,7 +260,7 @@ def demo_status_check():
     # 初始化工具
     config_manager = ConfigManager('config.json')
     config = config_manager.get_config('default')
-    tools = create_strands_tools(config)
+    tools = create_strands_tools(config, SID_DEMO)
     
     # 获取各个工具
     execute_code_in_sandbox = tools[0]
