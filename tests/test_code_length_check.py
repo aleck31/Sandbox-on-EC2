@@ -11,12 +11,14 @@ from config_manager import ConfigManager
 from ec2_sandbox.strands_tools import create_strands_tools
 
 
+SID_DEMO = 'sid-a1b2c3d4e5f'
+
 def test_code_length_check():
     """测试代码长度检查"""
     
     config_manager = ConfigManager('config.json')
-    config = config_manager.get_config('default')
-    tools = create_strands_tools(config)
+    config = config_manager.get_sandbox_config('sandbox-default')
+    tools = create_strands_tools(config, SID_DEMO)
     execute_code_in_sandbox = tools[0]
     
     print("🧪 测试代码长度检查功能")

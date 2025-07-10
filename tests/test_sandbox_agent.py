@@ -18,10 +18,10 @@ def test_basic_functionality():
     try:
         # 加载配置
         config_manager = ConfigManager('config.json')
-        config = config_manager.get_config('default')
+        config = config_manager.get_sandbox_config('sandbox-default')
         
         # 创建工具
-        tools = create_strands_tools(config)
+        tools = create_strands_tools(config, 'sid-a1b2c3d4e5f')
         execute_code_in_sandbox = tools[0]
         
         # 测试代码执行
@@ -46,8 +46,8 @@ def test_agent_integration():
     try:
         # 加载配置和工具
         config_manager = ConfigManager('config.json')
-        config = config_manager.get_config('default')
-        tools = create_strands_tools(config)
+        config = config_manager.get_sandbox_config('sandbox-default')
+        tools = create_strands_tools(config, 'sid-a1b2c3d4e5f')
         
         # 尝试创建BedrockModel
         try:
@@ -96,8 +96,8 @@ def test_code_length_limit():
     
     try:
         config_manager = ConfigManager('config.json')
-        config = config_manager.get_config('default')
-        tools = create_strands_tools(config)
+        config = config_manager.get_sandbox_config('sandbox-default')
+        tools = create_strands_tools(config, 'sid-a1b2c3d4e5f')
         execute_code_in_sandbox = tools[0]
         
         # 测试超长代码
@@ -128,10 +128,10 @@ def test_file_operations():
     
     try:
         config_manager = ConfigManager('config.json')
-        config = config_manager.get_config('default')
-        tools = create_strands_tools(config)
+        config = config_manager.get_sandbox_config('sandbox-default')
+        tools = create_strands_tools(config, 'sid-a1b2c3d4e5f')
         execute_code_in_sandbox = tools[0]
-        get_task_files = tools[1]
+        get_session_files = tools[1]
         
         # 执行代码生成文件
         code_result = execute_code_in_sandbox(
@@ -153,14 +153,18 @@ print("File created successfully")
             task_hash = result_dict['task_hash']
             
             # 获取文件
-            files_result = get_task_files(task_hash=task_hash)
+            files_result = get_session_files(task_hash=task_hash)
             files_dict = json.loads(files_result)
             
-            if 'test_file.json' in files_dict:
+            # 检查返回格式和文件是否存在
+            if (files_dict.get('success') and 
+                files_dict.get('data', {}).get('files', {}).get('test_file.json')):
                 print("✅ 文件操作测试通过")
+                print(f"   文件内容预览: {files_dict['data']['files']['test_file.json'][:50]}...")
                 return True
             else:
                 print("❌ 文件未正确创建或获取")
+                print(f"   返回结果: {files_dict}")
                 return False
         else:
             print("❌ 代码执行失败")

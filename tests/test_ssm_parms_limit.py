@@ -16,7 +16,7 @@ def test_final_boundary():
     """在70KB和75KB之间找到精确边界"""
     
     config_manager = ConfigManager('config.json')
-    config = config_manager.get_config('default')
+    config = config_manager.get_sandbox_config('sandbox-default')
     
     session = boto3.Session(profile_name=config.aws_profile)
     ssm_client = session.client('ssm', region_name=config.region)

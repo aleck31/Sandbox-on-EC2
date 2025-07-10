@@ -1,5 +1,6 @@
 import os
 import sys
+import random
 
 # 添加父目录到路径，以便导入模块
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -10,15 +11,15 @@ from ec2_sandbox.core import EC2SandboxEnv
 
 # 加载配置
 manager = ConfigManager('config.json')
-config = manager.get_config('default')
+config = manager.get_sandbox_config('sandbox-default')
 config.region = 'ap-northeast-1'
 
 # 创建环境
 sandbox_env = EC2SandboxEnv(config)
 
 # 创建两个不同的沙盒实例
-sandbox1 = sandbox_env.create_sandbox_instance('user_alice')
-sandbox2 = sandbox_env.create_sandbox_instance('user_bob')
+sandbox1 = sandbox_env.create_sandbox_instance(f'alice_{random.randint(1000, 9999)}')
+sandbox2 = sandbox_env.create_sandbox_instance(f'bob_{random.randint(1000, 9999)}')
 
 # Alice创建文件
 result1 = sandbox1.execute_code('''
@@ -45,8 +46,8 @@ try:
 except FileNotFoundError:
     print(\"Bob cannot access Alice's file - Good isolation!\")
 ''', runtime='python3')
-
-print('\\n=== Bob Result ===')
+print('\n')
+print('=== Bob Result ===')
 print(f'Success: {result2.success}')
 print(f'Working Dir: {result2.working_directory}')
 print(f'Output: {result2.stdout}')

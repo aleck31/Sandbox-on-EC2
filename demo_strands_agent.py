@@ -18,7 +18,7 @@ def create_coding_assistant():
     # 初始化配置和工具
     print("🔧 初始化EC2沙箱工具...")
     config_manager = ConfigManager('config.json')
-    config = config_manager.get_config('default')
+    config = config_manager.get_sandbox_config('sandbox-default')
     
     print("🛠️ 创建Strands工具...")
     tools = create_strands_tools(config, SID_DEMO)
@@ -71,7 +71,7 @@ def demo_python_execution():
     
     # 初始化工具
     config_manager = ConfigManager('config.json')
-    config = config_manager.get_config('default')
+    config = config_manager.get_sandbox_config('sandbox-default')
     tools = create_strands_tools(config, SID_DEMO)
     execute_code_in_sandbox = tools[0]  # 第一个工具是代码执行工具
     
@@ -124,7 +124,7 @@ def demo_nodejs_execution():
     
     # 初始化工具
     config_manager = ConfigManager('config.json')
-    config = config_manager.get_config('default')
+    config = config_manager.get_sandbox_config('sandbox-default')
     tools = create_strands_tools(config, SID_DEMO)
     execute_code_in_sandbox = tools[0]
     
@@ -187,7 +187,7 @@ def demo_file_operations():
     
     # 初始化工具
     config_manager = ConfigManager('config.json')
-    config = config_manager.get_config('default')
+    config = config_manager.get_sandbox_config('sandbox-default')
     tools = create_strands_tools(config, SID_DEMO)
     get_task_files = tools[1]  # 第二个工具是文件获取工具
     
@@ -246,7 +246,7 @@ def demo_status_check():
     
     # 初始化工具
     config_manager = ConfigManager('config.json')
-    config = config_manager.get_config('default')
+    config = config_manager.get_sandbox_config('sandbox-default')
     tools = create_strands_tools(config, SID_DEMO)
     check_sandbox_status = tools[3]  # 第四个工具是状态检查工具
     
@@ -259,7 +259,7 @@ def demo_status_check():
     
     # 初始化工具
     config_manager = ConfigManager('config.json')
-    config = config_manager.get_config('default')
+    config = config_manager.get_sandbox_config('sandbox-default')
     tools = create_strands_tools(config, SID_DEMO)
     
     # 获取各个工具
@@ -413,7 +413,7 @@ def main():
     # 检查配置
     try:
         config_manager = ConfigManager('config.json')
-        config = config_manager.get_config('default')
+        config = config_manager.get_sandbox_config('sandbox-default')
         print(f"\n✅ 配置加载成功")
         print(f"   实例ID: {config.instance_id}")
         print(f"   区域: {config.region}")

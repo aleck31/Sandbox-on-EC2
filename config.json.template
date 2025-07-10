@@ -1,12 +1,14 @@
 {
   "_comment": "EC2 Sandbox Configuration Template",
-  "_instructions": {
+  "_generated": {
+    "script_version": "1.5.0"
+  },  "_instructions": {
     "1": "Copy this template to config.json and modify as needed",
     "2": "Replace placeholder values with your actual AWS resources",
     "3": "Choose authentication method: aws_profile OR access_key_id/secret_access_key",
     "4": "Optional: session_token for temporary credentials (STS)"
   },
-  "example_aws_profile": {
+  "sandbox-default": {
     "instance_id": "i-YOUR_INSTANCE_ID_HERE",
     "region": "us-east-1",
     "aws_profile": "default",
@@ -22,7 +24,7 @@
       "sh"
     ]
   },
-  "example_with_keys": {
+  "sandbox-dev": {
     "instance_id": "i-YOUR_INSTANCE_ID_HERE",
     "region": "us-west-2",
     "access_key_id": "YOUR_ACCESS_KEY_ID",

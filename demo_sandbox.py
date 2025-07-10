@@ -16,12 +16,12 @@ def example_basic_usage():
     
     # 从配置文件创建沙箱环境
     manager = ConfigManager('config.json')
-    config = manager.get_config('default')
+    config = manager.get_sandbox_config('sandbox-default')
     
     print(f"使用环境: default")
     print(f"实例ID: {config.instance_id}")
     print(f"区域: {config.region}")
-    print(f"认证方式: {manager.get_auth_method('default')}")
+    print(f"认证方式: {manager.get_auth_method('sandbox-default')}")
     
     # 创建沙箱环境
     sandbox_env = EC2SandboxEnv(config)
@@ -71,7 +71,7 @@ def example_with_files():
     
     # 创建沙箱环境
     manager = ConfigManager('config.json')
-    config = manager.get_config('default')
+    config = manager.get_sandbox_config('sandbox-default')
     sandbox_env = EC2SandboxEnv(config)
     sandbox = sandbox_env.create_sandbox_instance("file_example")
     
@@ -158,7 +158,7 @@ def example_with_environment():
     
     # 创建沙箱环境
     manager = ConfigManager('config.json')
-    config = manager.get_config('default')
+    config = manager.get_sandbox_config('sandbox-default')
     sandbox_env = EC2SandboxEnv(config)
     sandbox = sandbox_env.create_sandbox_instance("env_example")
     
@@ -228,7 +228,7 @@ def example_nodejs():
     
     # 创建沙箱环境
     manager = ConfigManager('config.json')
-    config = manager.get_config('default')
+    config = manager.get_sandbox_config('sandbox-default')
     sandbox_env = EC2SandboxEnv(config)
     sandbox = sandbox_env.create_sandbox_instance("nodejs_example")
     
@@ -290,7 +290,7 @@ def example_cleanup_and_status():
     
     # 创建沙箱环境
     manager = ConfigManager('config.json')
-    config = manager.get_config('default')
+    config = manager.get_sandbox_config('sandbox-default')
     sandbox_env = EC2SandboxEnv(config)
     
     # 检查实例状态
@@ -395,11 +395,11 @@ def main():
     # 验证配置
     try:
         manager = ConfigManager('config.json')
-        config = manager.get_config('default')
+        config = manager.get_sandbox_config('sandbox-default')
         print(f"\n✅ 配置加载成功")
         print(f"   实例ID: {config.instance_id}")
         print(f"   区域: {config.region}")
-        print(f"   认证方式: {manager.get_auth_method('default')}")
+        print(f"   认证方式: {manager.get_auth_method('sandbox-default')}")
     except Exception as e:
         print(f"\n❌ 配置验证失败: {e}")
         print("请检查 config.json 文件的配置")

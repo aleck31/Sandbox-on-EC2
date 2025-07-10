@@ -38,26 +38,25 @@ class ConfigManager:
     
     def list_environments(self) -> list:
         """列出所有可用的环境配置"""
-        # 过滤掉以下划线开头的注释字段
-        return [env for env in self._configs.keys() if not env.startswith('_')]
+        # 过滤掉以下划线开头的注释字段和mcp配置
+        return [env for env in self._configs.keys() if not env.startswith('_') and not env.startswith('mcp')]
     
-    def get_raw_config(self, environment: str = "default") -> Dict[str, Any]:
+    def get_raw_config(self, name: str) -> Dict[str, Any]:
         """
         获取指定环境的原始配置字典
         
         Args:
-            environment: 环境名称
+            name: 配置名称
             
         Returns:
             Dict[str, Any]: 原始配置字典
         """
-        if environment not in self._configs:
-            available = self.list_environments()
-            raise ValueError(f"Environment '{environment}' not found. Available: {available}")
+        if name not in self._configs:
+            raise ValueError(f"Config '{name}' not found.")
         
-        return self._configs[environment].copy()
+        return self._configs[name].copy()
     
-    def get_config(self, environment: str = "default") -> SandboxConfig:
+    def get_sandbox_config(self, environment: str = 'sandbox-default') -> SandboxConfig:
         """
         获取指定环境的沙盒配置
         
@@ -148,7 +147,7 @@ class ConfigManager:
         if errors:
             raise ValueError("Configuration validation failed:\n" + "\n".join(f"  - {error}" for error in errors))
     
-    def get_auth_method(self, environment: str = "default") -> str:
+    def get_auth_method(self, environment: str = "sandbox-default") -> str:
         """获取认证方式（用于查询）"""
         config_dict = self._configs.get(environment, {})
         
@@ -185,7 +184,7 @@ def main():
         
         elif args.validate:
             try:
-                config = manager.get_config(args.validate)
+                config = manager.get_sandbox_config(args.validate)
                 print(f"✅ Configuration '{args.validate}' is valid")
                 print(f"   Instance: {config.instance_id}")
                 print(f"   Region: {config.region}")
@@ -194,7 +193,7 @@ def main():
                 print(f"❌ Configuration '{args.validate}' is invalid: {e}")
         
         elif args.show:
-            config = manager.get_config(args.show)
+            config = manager.get_sandbox_config(args.show)
             print(f"Configuration for '{args.show}':")
             print(f"  Instance ID: {config.instance_id}")
             print(f"  Region: {config.region}")
@@ -215,7 +214,7 @@ def main():
             print(f"Found {len(environments)} environments in {args.config}:")
             for env in environments:
                 try:
-                    config = manager.get_config(env)
+                    config = manager.get_sandbox_config(env)
                     auth_method = manager.get_auth_method(env)
                     print(f"  ✅ {env}: {config.instance_id} ({config.region}) - {auth_method}")
                 except Exception as e:

@@ -26,7 +26,7 @@ def load_test_config():
         
         # 使用配置管理器加载配置
         manager = ConfigManager(config_path)
-        config = manager.get_config('default')  # 使用正确的环境名称
+        config = manager.get_sandbox_config('sandbox-default')  # 使用正确的环境名称
         
         # 调整测试参数（保持原有配置，只调整测试相关的）
         original_execution_time = config.max_execution_time
@@ -168,7 +168,7 @@ for var in ["TEST_VAR", "NUMBER_VAR", "BOOL_VAR"]:
     print(f"{var}: {value}")
 
 # 使用环境变量
-test_val = os.environ.get("TEST_VAR", "default")
+test_val = os.environ.get("TEST_VAR", "sandbox-default")
 number_val = int(os.environ.get("NUMBER_VAR", "0"))
 bool_val = os.environ.get("BOOL_VAR", "false").lower() == "true"
 
@@ -376,7 +376,7 @@ def test_strands_integration():
     
     try:
         config = load_test_config()
-        tools = create_strands_tools(config)
+        tools = create_strands_tools(config, 'sid-a1b2c3d4e5f')
         
         # 测试工具创建
         print(f"创建了 {len(tools)} 个工具")

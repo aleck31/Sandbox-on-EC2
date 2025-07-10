@@ -96,7 +96,7 @@ vim config.json
 
 ```json
 {
-  "default": {
+  "sandbox-default": {
     "instance_id": "i-1234567890abcdef0",
     "region": "us-east-1",
     "aws_profile": "default",
@@ -118,7 +118,7 @@ from ec2_sandbox.core import EC2SandboxEnv
 
 # 从配置文件加载配置
 manager = ConfigManager('config.json')
-config = manager.get_config('default')  # 或其他环境名
+config = manager.get_sandbox_config('sandbox-default')  # 或其他环境名
 
 # 创建沙箱环境
 sandbox_env = EC2SandboxEnv(config)
@@ -148,8 +148,8 @@ from strands_tools import create_strands_tools
 
 # 从配置文件创建工具
 manager = ConfigManager('config.json')
-config = manager.get_config('default')
-tools = create_strands_tools(config)
+config = manager.get_sandbox_config('sandbox-default')
+tools = create_strands_tools(config, 'sid-a1b2c3d4e5f')
 
 # 创建BedrockModel（需要us-west-2区域）
 bedrock_model = BedrockModel(

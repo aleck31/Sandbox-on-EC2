@@ -154,7 +154,7 @@ class EC2SandboxDemo:
         """加载配置"""
         try:
             config_manager = ConfigManager('config.json')
-            self.sandbox_config = config_manager.get_config('default')
+            self.sandbox_config = config_manager.get_sandbox_config('sandbox-default')
             logger.info("配置加载成功")
         except Exception as e:
             logger.error(f"配置加载失败: {e}")
@@ -304,18 +304,21 @@ class EC2SandboxDemo:
                 if agent and hasattr(agent, 'messages'):
                     messages_count = len(agent.messages)
                     agent.messages = []
-                    logger.info(f"已清理{messages_count}条Agent历史消息")
+                    logger.info(f"已清理会话 {session_id} 的 {messages_count} 条Agent消息")
             
             # 清空会话的对话计数器
-            self.session_manager.clear_session(session_id)
-            logger.info(f"已清空会话对话记录: {session_id}")
+            try:
+                self.session_manager.clear_session(session_id)
+                logger.info(f"已清空会话 {session_id} 的记录")
+            except Exception as e:
+                logger.warning(f"清空会话记录失败: {e}")
             
             # 返回清空后的会话信息和文件信息
             return self.get_session_info(session_id), "暂无文件信息"
             
         except Exception as e:
-            logger.error(f"清空文件信息失败: {e}")
-            return "获取会话信息失败", "清空文件信息失败"
+            logger.error(f"清空聊天状态失败: {e}")
+            return "清空操作失败", "清空操作失败"
     
     def get_session_info(self, session_id: str):
         """获取当前用户会话的统计信息"""
@@ -653,10 +656,10 @@ def create_demo():
             )
                 
             # 监听chatbot clear事件，同时清空文件信息
-            chat_interface.chatbot.clear(
-                fn=demo_instance.clear_chat_status,
-                outputs=[session_info, file_info]
-            )
+            # chat_interface.chatbot.clear(
+            #     fn=demo_instance.clear_chat_status,
+            #     outputs=[session_info, file_info]
+            # )
 
             chat_interface.load(
                 fn=demo_instance.get_sandbox_env_info,
