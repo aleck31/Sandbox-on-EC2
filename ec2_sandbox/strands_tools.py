@@ -177,32 +177,22 @@ def create_strands_tools(config: SandboxConfig, session_id: str) -> List[Callabl
         task_hash: Optional[str] = None
     ) -> str:
         """
-        获取当前会话中的文件内容 - 支持跨任务文件访问
-        
-        在同一个会话中，所有任务的文件都存储在共享的会话目录下：
-        /session_path/task_hash_1/file1.txt
-        /session_path/task_hash_2/file2.py
-        
-        使用此工具可以：
-        1. 查看会话中所有任务创建的文件
-        2. 获取特定文件的内容，无论它在哪个任务中创建
-        3. 在新任务中通过相对路径访问之前任务的文件
+        获取当前用户会话中的文件内容 - 支持跨任务文件访问
         
         Args:
-            filename: 文件名 (可选)，如果不指定则返回所有文件列表
+            filename: 文件名 (可选)，如果不指定则返回文件列表
             task_hash: 任务哈希 (可选)，如果指定则只在该任务中查找
             
         Returns:
-            包含文件信息的JSON，包括文件内容和路径信息
+            统一格式的JSON, 包括文件内容和路径信息
             
         示例用法：
-        - get_session_files() # 获取所有文件列表
-        - get_session_files(filename="data.csv") # 获取特定文件内容
-        - 在代码中使用: open("../task_hash/file.txt") # 访问其他任务的文件
-
-        Returns:
-            统一格式的JSON字符串
+        - get_session_files() # 获取当前会话内所有文件列表
+        - get_session_files(task_hash="abc123") # 获取指定任务的所有文件
+        - get_session_files(filename="data.csv") # 在当前会话中查找并获取特定文件内容
+        - get_session_files(filename="data.csv", task_hash="abc123") # 在指定任务中获取特定文件内容
         """
+
         try:
             ctx = get_session_context()
             if not ctx:
@@ -443,8 +433,8 @@ def create_strands_tools(config: SandboxConfig, session_id: str) -> List[Callabl
         execute_code_in_sandbox,
         get_session_files,
         cleanup_expired_tasks,
-        check_sandbox_status,
-        list_session_structure
+        list_session_structure,
+        check_sandbox_status
     ]
     
     return tools_list

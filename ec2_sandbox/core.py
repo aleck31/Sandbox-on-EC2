@@ -5,9 +5,8 @@ EC2 Sandbox 核心功能
 """
 
 import base64
-import time
 import threading
-from typing import Dict, Any, Optional, List, Union, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .sandbox import SandboxInstance
@@ -18,8 +17,8 @@ from .utils import logger, is_safe_filename, create_aws_client
 @dataclass
 class SandboxConfig:
     """沙盒基础环境配置"""
-    instance_id: str
     region: str
+    instance_id: str
     aws_profile: Optional[str] = None
     access_key_id: Optional[str] = None
     secret_access_key: Optional[str] = None
@@ -29,6 +28,7 @@ class SandboxConfig:
     max_memory_mb: int = 1024
     cleanup_after_hours: int = 24
     allowed_runtimes: Optional[List[str]] = None
+    timestamp: Optional[str] = None  # 配置更新时间
 
     def __post_init__(self):
         if self.allowed_runtimes is None:
@@ -36,7 +36,7 @@ class SandboxConfig:
 
 
 class EC2SandboxEnv:
-    """EC2沙盒环境 - 单例，对应一个EC2实例，负责基础设施管理"""
+    """EC2沙盒环境 - 单例, 对应一个EC2实例, 负责基础设施管理"""
     
     _instances = {}  # 按配置缓存环境实例
     
@@ -217,6 +217,14 @@ class EC2SandboxEnv:
                 'launch_time': instance['LaunchTime'].isoformat()
             }
             
+            # 获取操作系统信息
+            try:
+                os_name = self._get_instance_os_name(instance)
+                status_info['os_name'] = os_name
+            except Exception as e:
+                logger.warning(f"获取操作系统信息失败: {e}")
+                status_info['os_name'] = 'Unknown'
+            
             # 获取CPU使用率（如果实例正在运行）
             if instance['State']['Name'] == 'running':
                 try:
@@ -280,6 +288,43 @@ class EC2SandboxEnv:
                 
         except Exception as e:
             raise Exception(f"CloudWatch API error: {str(e)}")
+    
+    def _get_instance_os_name(self, instance: Dict[str, Any]) -> str:
+        """获取实例的操作系统名称"""
+        try:
+            ami_id = instance.get('ImageId')
+            if not ami_id:
+                return "Unknown"
+            
+            ami_response = self.ec2_client.describe_images(ImageIds=[ami_id])
+            if not ami_response['Images']:
+                return "Unknown"
+            
+            ami = ami_response['Images'][0]
+            description = ami.get('Description', '')
+            architecture = ami.get('Architecture', '')
+            
+            # 解析Ubuntu版本
+            if 'Ubuntu' in description:
+                if '24.04' in description:
+                    os_name = "Ubuntu 24.04 LTS"
+                elif '22.04' in description:
+                    os_name = "Ubuntu 22.04 LTS"
+                elif '20.04' in description:
+                    os_name = "Ubuntu 20.04 LTS"
+                else:
+                    os_name = "Ubuntu Linux"
+
+                if architecture.lower() == 'arm64':
+                    os_name += " ARM64"
+                
+                return os_name
+            
+            return "Unknown"
+            
+        except Exception as e:
+            logger.warning(f"获取操作系统名称失败: {e}")
+            return "Unknown"
     
     def cleanup_old_tasks(self, hours: Optional[int] = None):
         """清理过期的任务目录"""
