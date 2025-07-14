@@ -8,9 +8,9 @@ import time
 import os
 import threading
 from typing import Dict, Optional
-import logging
+from ec2_sandbox.utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class SessionData:
     """简化的会话数据"""
@@ -38,7 +38,7 @@ class SessionManager:
     def __init__(self):
         self.sessions: Dict[str, SessionData] = {}
         self.lock = threading.Lock()
-    
+
     def get_or_create_session(self, session_id: str) -> SessionData:
         """获取或创建用户会话"""
         if not session_id:
@@ -55,20 +55,15 @@ class SessionManager:
                     self.sessions[session_id] = SessionData(session_id)
                     logger.info(f"创建新会话: {session_id}")
                 return self.sessions[session_id]
-    
-    def get_session(self, session_id: str) -> Optional[SessionData]:
-        """获取会话数据"""
-        with self.lock:
-            return self.sessions.get(session_id)
-    
-    def clear_session(self, session_id: str) -> bool:
-        """清空会话（重置任务计数）"""
-        session_data = self.get_session(session_id)
+
+    def reset_session_counter(self, session_id: str) -> bool:
+        """重置会话计数器"""
+        session_data = self.sessions.get(session_id)
         if session_data:
             with session_data.lock:
                 session_data.task_count = 0
-                session_data.update_activity()
-                logger.info(f"清空会话: {session_id}")
+                session_data.last_activity = time.time()
+                logger.info(f"重置任务计数器: {session_id}")
                 return True
         return False
     

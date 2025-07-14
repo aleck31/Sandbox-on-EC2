@@ -72,7 +72,7 @@ def format_file_info(tool_results):
         if not session_displayed:
             session_id = result.get('session_id', 'N/A')
             if session_id != 'N/A':
-                info_lines.append(f"**🔗 沙盒执行** (sid:{session_id})")
+                info_lines.append(f"**🗳️ 沙盒执行结果** (sid:{session_id})")
                 info_lines.append("")  # 空行
                 session_displayed = True
         
@@ -281,7 +281,7 @@ class EC2SandboxDemo:
             if self.sandbox_config.allowed_runtimes:
                 runtimes = ', '.join([f"`{rt}`" for rt in self.sandbox_config.allowed_runtimes])
                 config_info += f"- 🚀 **支持运行时**: {runtimes}\n"
-            config_info += f"- ⏱️ **最大执行时间**: {self.sandbox_config.max_execution_time}秒\n"
+            config_info += f"- 🕐 **最大执行时间**: {self.sandbox_config.max_execution_time}秒\n"
             config_info += f"- 💾 **最大内存**: {self.sandbox_config.max_memory_mb}MB\n"
             config_info += f"- 🧹 **清理时间**: {self.sandbox_config.cleanup_after_hours}小时"
 
@@ -290,7 +290,7 @@ class EC2SandboxDemo:
             logger.error(f"获取沙盒环境信息失败: {e}")
             return "获取沙盒环境信息失败"
     
-    def clear_chat_status(self, request: gr.Request):
+    def clear_chat_state(self, request: gr.Request):
         """清空文件信息并重置Agent会话历史"""
         try:
             session_id = request.session_hash if request else None
@@ -307,18 +307,21 @@ class EC2SandboxDemo:
                     agent.messages = []
                     logger.info(f"已清理会话 {session_id} 的 {messages_count} 条Agent消息")
             
-            # 清空会话的对话计数器
+            # 重置会话计数器
             try:
-                self.session_manager.clear_session(session_id)
-                logger.info(f"已清空会话 {session_id} 的记录")
+                result = self.session_manager.reset_session_counter(session_id)
+                logger.info(f"重置会话计数器结果: {result}")
             except Exception as e:
-                logger.warning(f"清空会话记录失败: {e}")
+                logger.error(f"重置会话计数器失败: {e}")
             
-            # 返回清空后的会话信息和文件信息
-            return self.get_session_info(session_id), "暂无文件信息"
+            # 获取清空后的状态
+            session_info = self.get_session_info(session_id)
+            file_info = "暂无文件信息"
+
+            return session_info, file_info
             
         except Exception as e:
-            logger.error(f"清空聊天状态失败: {e}")
+            logger.error(f"清空聊天状态失败: {e}", exc_info=True)
             return "清空操作失败", "清空操作失败"
     
     def get_session_info(self, session_id: str):
@@ -448,41 +451,71 @@ class EC2SandboxDemo:
                     async def stream_handler():
                         try:
                             if agent is None:
-                                stream_queue.put("❌ Agent 未正确初始化, 请检查配置。")
+                                stream_queue.put({"error": "❌ Agent 未正确初始化, 请检查配置。"})
                                 return
 
-                            full_response = ""
+                            response_data = {
+                                "text": "",
+                                "tool_use": None
+                            }
                             first_chunk = True
 
                             # 简单直接：如果有 MCP 客户端就在其 context 中执行
                             if self.mcp_client:
                                 with self.mcp_client:
                                     async for event in agent.stream_async(message):
+                                        # 捕获工具调用信息
+                                        if "current_tool_use" in event:
+                                            tool_info = event["current_tool_use"]
+                                            if tool_info and tool_info.get("name"):
+                                                response_data["tool_use"] = {
+                                                    "name": tool_info.get("name", "Unknown"),
+                                                    "input": tool_info.get("input", {})
+                                                }
+                                                # 发送工具状态更新
+                                                stream_queue.put(response_data.copy())
+                                        
                                         if "data" in event:
                                             chunk = event["data"]
                                             if first_chunk:
-                                                full_response = chunk
+                                                response_data["text"] = chunk
                                                 first_chunk = False
                                             else:
-                                                full_response += chunk
-                                            stream_queue.put(full_response)
+                                                response_data["text"] += chunk
+                                            
+                                            # 有文本输出时，清除工具信息（表示工具执行完成）
+                                            response_data["tool_use"] = None
+                                            stream_queue.put(response_data.copy())
                             else:
                                 # 没有 MCP，直接执行
                                 async for event in agent.stream_async(message):
+                                    # 捕获工具调用信息
+                                    if "current_tool_use" in event:
+                                        tool_info = event["current_tool_use"]
+                                        if tool_info and tool_info.get("name"):
+                                            response_data["tool_use"] = {
+                                                "name": tool_info.get("name", "Unknown"),
+                                                "input": tool_info.get("input", {})
+                                            }
+                                            # 发送工具状态更新
+                                            stream_queue.put(response_data.copy())
+                                    
                                     if "data" in event:
                                         chunk = event["data"]
                                         if first_chunk:
-                                            full_response = chunk
+                                            response_data["text"] = chunk
                                             first_chunk = False
                                         else:
-                                            # 累积后续文本块
-                                            full_response += chunk
-                                        stream_queue.put(full_response)
+                                            response_data["text"] += chunk
+                                        
+                                        # 有文本输出时，清除工具信息（表示工具执行完成）
+                                        response_data["tool_use"] = None
+                                        stream_queue.put(response_data.copy())
                                     
                         except Exception as e:
                             logger.error(f"流式处理失败: {e}")
                             error_msg = f"抱歉，执行过程中遇到错误：\n\n```\n{str(e)}\n```\n\n请尝试重新描述您的需求，或者检查网络连接。"
-                            stream_queue.put(error_msg)                             
+                            stream_queue.put({"error": error_msg})                             
 
                         finally:
                             # 发送结束信号
@@ -508,29 +541,44 @@ class EC2SandboxDemo:
             while True:
                 try:
                     # 等待数据，设置超时避免无限等待
-                    chunk = stream_queue.get(timeout=180)
+                    data = stream_queue.get(timeout=180)
 
-                    if chunk is None:
+                    if data is None:
                         # 收到结束信号
                         if last_content:
                             duration = time.time() - start_time
                             stat_msg.content = f"处理完成。耗时: {duration:.1f}s"
                             stat_msg.metadata = {
-                                "title": "✅ Done",
+                                "title": "✅ Completely done",
                                 "status": "done"
                             }
                             yield ([stat_msg, ChatMessage(role="assistant", content=last_content)], self.get_session_info(session_id), self.get_file_info(session_id))
                         break
                     
                     # 正常的流式内容
-                    if chunk and chunk.strip():
-                        last_content = chunk  # 保存最后的内容
-                        stat_msg.content = f"正在执行 ..."
-                        stat_msg.metadata = {
-                            "title": "🔄 Processing", 
-                            "status": "pending"
-                        }
-                        yield ([stat_msg, ChatMessage(role="assistant", content=chunk)], self.get_session_info(session_id), self.get_file_info(session_id))
+                    if isinstance(data, dict):
+                        text_content = data.get("text", "")
+                        tool_info = data.get("tool_use")
+                        
+                        # 如果有工具信息，更新状态消息
+                        if tool_info:
+                            tool_name = tool_info.get("name", "Unknown")
+                            stat_msg.content = f"正在执行: {tool_name}"
+                            stat_msg.metadata = {
+                                "title": "🛠️ Tool Execution", 
+                                "status": "pending"
+                            }
+                        else:
+                            stat_msg.content = f"正在生成回复 ..."
+                            stat_msg.metadata = {
+                                "title": "🔄 Processing", 
+                                "status": "pending"
+                            }
+
+                        # 如果有文本内容，更新并输出
+                        if text_content and text_content.strip():
+                            last_content = text_content
+                            yield ([stat_msg, ChatMessage(role="assistant", content=text_content)], self.get_session_info(session_id), self.get_file_info(session_id))
 
                 except queue.Empty:
                     # 超时，检查是否有异常
@@ -659,10 +707,10 @@ def create_demo():
             )
                 
             # 监听chatbot clear事件，同时清空文件信息
-            # chat_interface.chatbot.clear(
-            #     fn=demo_instance.clear_chat_status,
-            #     outputs=[session_info, file_info]
-            # )
+            chat_interface.chatbot.clear(
+                fn=demo_instance.clear_chat_state,
+                outputs=[session_info, file_info]
+            )
 
             chat_interface.load(
                 fn=demo_instance.get_sandbox_env_info,
