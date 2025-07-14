@@ -66,7 +66,7 @@ print(f"2 + 2 = {result}")
     try:
         result = sandbox.execute_code(
             code=code,
-            runtime="python3",
+            runtime="python",
             create_filesystem=True
         )
         
@@ -130,7 +130,7 @@ print("Files created successfully!")
     try:
         result = sandbox.execute_code(
             code=code,
-            runtime="python3",
+            runtime="python",
             files=files,
             create_filesystem=True
         )
@@ -181,7 +181,7 @@ print(f"Boolean: {bool_val}")
     try:
         result = sandbox.execute_code(
             code=code,
-            runtime="python3",
+            runtime="python",
             env_vars=env_vars,
             create_filesystem=True
         )
@@ -316,7 +316,7 @@ print("This won't be reached")
     try:
         result = sandbox.execute_code(
             code=bad_code,
-            runtime="python3",
+            runtime="python",
             create_filesystem=True
         )
         
@@ -354,7 +354,7 @@ print("Operation completed successfully")
         start_time = time.time()
         result = sandbox.execute_code(
             code=short_code,
-            runtime="python3",
+            runtime="python",
             create_filesystem=True
         )
         execution_time = time.time() - start_time
@@ -388,7 +388,7 @@ def test_strands_integration():
         
         result_json = execute_code_in_sandbox(
             code="print('Strands integration test')\nprint(f'Result: {2**10}')",
-            runtime="python3",
+            runtime="python",
             task_id="strands_test"
         )
         

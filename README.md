@@ -145,11 +145,11 @@ vim config.json
     "region": "us-east-1",
     "aws_profile": "prod",
     "base_sandbox_dir": "/opt/sandbox",
-    "max_execution_time": 60,
+    "max_execution_time": 900,
     "max_memory_mb": 512,
     "cleanup_after_hours": 1
   },
-  "sandbox-science": {
+  "sandbox-gpu": {
     "instance_id": "i-ds123456789",
     "region": "us-east-1",
     "aws_profile": "data",
@@ -246,7 +246,7 @@ print("Hello from EC2 Sandbox!")
 import sys
 print(f"Python version: {sys.version}")
 """,
-    runtime="python3"
+    runtime="python"
 )
 
 print(f"执行成功: {result.success}")
@@ -312,7 +312,7 @@ print(f"Loaded {len(data)} records")
 for record in data:
     print(record)
 """,
-    runtime="python3",
+    runtime="python",
     files=files,
     create_filesystem=True
 )
@@ -327,7 +327,7 @@ import os
 print(f"API Key: {os.environ.get('API_KEY')}")
 print(f"Debug Mode: {os.environ.get('DEBUG_MODE')}")
 """,
-    runtime="python3",
+    runtime="python",
     env_vars={
         "API_KEY": "your-api-key",
         "DEBUG_MODE": "true"

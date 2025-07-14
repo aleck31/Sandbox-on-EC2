@@ -7,6 +7,7 @@ set -e
 
 # 全局变量
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"      # 脚本目录
+DEFAULT_SANDBOX_ROLE="EC2SandboxRole"
 DEFAULT_INSTANCE_TYPE="t4g.small"             # AWS Graviton ARM 实例类型
 DEFAULT_OS_NAME="Ubuntu 24.04 LTS ARM64"        # 默认操作系统
 CREATED_INSTANCE_ID=""        # 传递实例ID
@@ -111,7 +112,7 @@ check_aws_config() {
 
 # 创建IAM角色（如果不存在）
 create_iam_role() {
-    local role_name="EC2SandboxRole"
+    local role_name="$DEFAULT_SANDBOX_ROLE"
     
     log_info "检查IAM角色: $role_name"
     
@@ -335,7 +336,7 @@ create_ec2_instance() {
         --count 1 \
         --instance-type $instance_type \
         --security-group-ids $sg_id \
-        --iam-instance-profile Name=EC2SandboxRole \
+        --iam-instance-profile Name=$DEFAULT_SANDBOX_ROLE \
         --user-data file://"$SCRIPT_DIR/scripts/user-data.sh" \
         --metadata-options "HttpTokens=required,HttpPutResponseHopLimit=2,HttpEndpoint=enabled" \
         --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$instance_name},{Key=Purpose,Value=Sandbox},{Key=OS,Value=Ubuntu-24.04},{Key=Access,Value=SSM-EIC},{Key=DataAnalysis,Value=Enabled}]" \
@@ -425,7 +426,7 @@ generate_sandbox_json() {
     "max_execution_time": 900,
     "max_memory_mb": 1024,
     "cleanup_after_hours": 48,
-    "allowed_runtimes": ["python3", "python", "node", "bash", "sh"]
+    "allowed_runtimes": ["python", "node", "bash", "sh"]
   }
 }
 EOF

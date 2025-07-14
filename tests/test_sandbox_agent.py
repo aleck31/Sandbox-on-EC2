@@ -27,7 +27,7 @@ def test_basic_functionality():
         # 测试代码执行
         result = execute_code_in_sandbox(
             code="print('Hello from test!')\nresult = 2 + 2\nprint(f'2 + 2 = {result}')",
-            runtime="python3",
+            runtime="python",
             task_id="test_basic"
         )
         
@@ -104,7 +104,7 @@ def test_code_length_limit():
         long_code = "print('test')\n" + "#" * 80000  # 80KB
         result = execute_code_in_sandbox(
             code=long_code,
-            runtime="python3",
+            runtime="python",
             task_id="test_long"
         )
         
@@ -142,7 +142,7 @@ with open('test_file.json', 'w') as f:
     json.dump(data, f)
 print("File created successfully")
 """,
-            runtime="python3",
+            runtime="python",
             task_id="test_files"
         )
         

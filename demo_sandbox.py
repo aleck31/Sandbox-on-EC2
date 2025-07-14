@@ -53,7 +53,7 @@ print("Analysis completed!")
     
     result = sandbox.execute_code(
         code=python_code,
-        runtime="python3"
+        runtime="python"
     )
     
     print("执行结果:")
@@ -139,7 +139,7 @@ print("Report generated: analysis_report.json")
     
     result = sandbox.execute_code(
         code=analysis_code,
-        runtime="python3",
+        runtime="python",
         files=input_files
     )
     
@@ -210,7 +210,7 @@ else:
     
     result = sandbox.execute_code(
         code=env_code,
-        runtime="python3",
+        runtime="python",
         env_vars=env_vars
     )
     

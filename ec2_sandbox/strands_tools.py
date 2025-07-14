@@ -45,7 +45,7 @@ def create_strands_tools(config: SandboxConfig, session_id: str) -> List[Callabl
     @tool
     def execute_code_in_sandbox(
         code: str,
-        runtime: str = "python3",
+        runtime: str = "python",
         task_id: Optional[str] = None,
         files: Optional[Dict[str, str]] = None,
         env_vars: Optional[Dict[str, str]] = None,
@@ -54,9 +54,11 @@ def create_strands_tools(config: SandboxConfig, session_id: str) -> List[Callabl
         """
         在EC2沙箱中安全执行代码(最大代码长度: 70KB)
         
+        注意: 如果使用GPU沙盒环境, python运行时自动支持GPU加速库(PyTorch, CuDF等)
+        
         Args:
             code: 要执行的代码 (必需)
-            runtime: 运行时环境，可选值: "python3"(默认), "python", "node", "bash", "sh"
+            runtime: 运行时环境，可选值: "python"(默认), "node", "bash", "sh"
             task_id: 任务ID, 用于标识任务
             files: 需要创建的文件 {filename: content}
             env_vars: 可选的环境变量 {key: value}

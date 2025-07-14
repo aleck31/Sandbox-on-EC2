@@ -686,9 +686,9 @@ def create_demo():
                         "写一个Node.js程序计算前21个斐波那契数",
                         "查询最新的AWS区域信息并保存到JSON文件",
                         "创建一个Bash脚本来统计当前目录的文件信息",
-                        "用matplotlib创建一个包含多个子图的数据可视化",
-                        "用Python创建一个简单的数据分析脚本, 分析销售数据并生成报告",
-                        "从datasciencedojo Github repo下载Boston房价数据集, 用pandas进行数据分析并生成统计报告"
+                        "检查GPU环境并进行简单的矩阵运算性能测试",
+                        "创建一个简单的数据分析脚本,分析销售数据并生成数据可视化报告",
+                        "从Data Science Dojo(Github)下载Titanic数据集, 用pandas进行数据分析并生成统计报告"
                     ],
                     theme='soft'
                 )

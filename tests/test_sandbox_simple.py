@@ -71,7 +71,7 @@ print("Test completed successfully!")
     
     result = sandbox_instance.execute_code(
         code=test_code,
-        runtime="python3",
+        runtime="python",
         create_filesystem=True
     )
     

@@ -35,7 +35,7 @@ print(f"Sum: {result}")
     
     result = execute_code_in_sandbox(
         code=normal_code,
-        runtime="python3",
+        runtime="python",
         task_id="test_normal"
     )
     
@@ -51,7 +51,7 @@ print(f"Sum: {result}")
     
     result = execute_code_in_sandbox(
         code=long_code,
-        runtime="python3", 
+        runtime="python", 
         task_id="test_long"
     )
     
@@ -67,7 +67,7 @@ print(f"Sum: {result}")
     
     result = execute_code_in_sandbox(
         code=boundary_code,
-        runtime="python3",
+        runtime="python",
         task_id="test_boundary"
     )
     

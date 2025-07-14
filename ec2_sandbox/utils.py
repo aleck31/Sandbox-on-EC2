@@ -128,7 +128,7 @@ def generate_task_hash(task_data: Dict[str, Any]) -> str:
     # 包含代码、运行时、时间戳等信息
     hash_data = {
         "code": task_data.get("code", ""),
-        "runtime": task_data.get("runtime", "python3"),
+        "runtime": task_data.get("runtime", "python"),
         "session_id": task_data.get("session_id", ""),
         "timestamp": int(time.time() // 3600)  # 按小时分组
     }

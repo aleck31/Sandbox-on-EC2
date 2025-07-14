@@ -112,7 +112,7 @@ print("结果已保存到 statistics_result.json")
     print("🔄 正在执行Python代码...")
     result = execute_code_in_sandbox(
         code=python_code,
-        runtime="python3",
+        runtime="python",
         task_id="python_demo"
     )
     print("📋 执行结果:")
@@ -211,7 +211,7 @@ print("文件已创建: demo_file.json")
     
     code_result = execute_code_in_sandbox(
         code=simple_code,
-        runtime="python3",
+        runtime="python",
         task_id="file_demo"
     )
     print("代码执行结果:")
@@ -307,7 +307,7 @@ print("报告已保存到 sales_report.json")
     
     result = execute_code_in_sandbox(
         code=python_code,
-        runtime="python3",
+        runtime="python",
         task_id="sales_analysis"
     )
     print("执行结果:")

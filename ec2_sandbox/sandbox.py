@@ -48,7 +48,7 @@ class SandboxInstance:
     def execute_code(
         self,
         code: str,
-        runtime: str = "python3",
+        runtime: str = "python",
         files: Optional[Dict[str, str]] = None,
         env_vars: Optional[Dict[str, str]] = None,
         create_filesystem: bool = True
@@ -89,8 +89,15 @@ class SandboxInstance:
             exec_commands = []
             
             # 设置环境变量
-            if env_vars:
-                for key, value in env_vars.items():
+            final_env_vars = env_vars.copy() if env_vars else {}
+            
+            # 自动添加GPU环境变量（用户设置的环境变量优先级更高）
+            if self.environment._is_gpu_environment():
+                gpu_env_vars = self.environment.get_gpu_env_vars()
+                final_env_vars = {**gpu_env_vars, **final_env_vars}
+            
+            if final_env_vars:
+                for key, value in final_env_vars.items():
                     safe_key, safe_value = sanitize_env_var(key, value)
                     exec_commands.append(f"export {safe_key}='{safe_value}'")
             
@@ -104,7 +111,7 @@ class SandboxInstance:
             exec_commands.extend(resource_limits)
             
             # 根据运行时准备代码执行
-            if runtime in ["python3", "python"]:
+            if runtime == "python":
                 # Python代码执行
                 code_file = f"task_{self.task_hash}.py"
                 try:

@@ -139,7 +139,7 @@ class ConfigManager:
         # 检查运行时
         allowed_runtimes = config_dict.get('allowed_runtimes')
         if allowed_runtimes is not None:  # 只在明确指定时验证
-            valid_runtimes = ["python3", "python", "node", "bash", "sh"]
+            valid_runtimes = ["python", "node", "bash", "sh"]
             invalid_runtimes = [rt for rt in allowed_runtimes if rt not in valid_runtimes]
             if invalid_runtimes:
                 errors.append(f"Invalid runtimes: {invalid_runtimes}. Valid: {valid_runtimes}")

@@ -34,7 +34,7 @@ class SandboxConfig:
 
     def __post_init__(self):
         if self.allowed_runtimes is None:
-            self.allowed_runtimes = ["python3", "python", "node", "bash", "sh"]
+            self.allowed_runtimes = ["python", "node", "bash", "sh"]
 
 
 class EC2SandboxEnv:
@@ -327,7 +327,36 @@ class EC2SandboxEnv:
         except Exception as e:
             logger.warning(f"获取操作系统名称失败: {e}")
             return "Unknown"
-    
+
+    def get_gpu_env_vars(self) -> Dict[str, str]:
+        """获取完整的GPU环境变量配置"""
+        return {
+            'CUDA_HOME': '/usr/local/cuda',
+            'PATH': '/usr/local/cuda/bin:/opt/miniconda3/envs/gpu-sandbox/bin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+            'LD_LIBRARY_PATH': '/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64',
+            'PYTHONPATH': '/opt/miniconda3/envs/gpu-sandbox/lib/python3.10/site-packages',
+            'CUDA_VISIBLE_DEVICES': '0',
+            'NVIDIA_VISIBLE_DEVICES': 'all',
+            'NVIDIA_DRIVER_CAPABILITIES': 'compute,utility'
+        }
+
+    def _is_gpu_environment(self) -> bool:
+        """检测是否为GPU环境"""
+        try:
+            response = self.ec2_client.describe_instances(InstanceIds=[self.config.instance_id])
+            instance_type = response['Reservations'][0]['Instances'][0]['InstanceType']
+            
+            # GPU实例类型列表
+            gpu_instance_families = ['p2', 'p3', 'p4', 'p5', 'g3', 'g4', 'g5', 'g6']
+            if any(instance_type.startswith(family) for family in gpu_instance_families):
+                logger.debug(f"检测到GPU实例类型: {instance_type}")
+                return True
+
+            return False
+        except Exception as e:
+            logger.debug(f"GPU环境检测失败: {e}")
+            return False
+
     def cleanup_old_tasks(self, hours: Optional[int] = None):
         """清理过期的任务目录"""
         cleanup_hours = hours or self.config.cleanup_after_hours
