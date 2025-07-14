@@ -9,18 +9,70 @@ import hashlib
 import time
 import re
 import logging
+import os
 from typing import Dict, Any, Optional, List
+from logging.handlers import RotatingFileHandler
 import boto3
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+
+def get_logger(name: str, log_file: Optional[str] = 'ec2_sandbox.log') -> logging.Logger:
+    """
+    获取配置好的logger实例
+    
+    Args:
+        name: logger名称
+        log_file: 日志文件名（可选），如果不提供则只输出到控制台
+    
+    Returns:
+        配置好的logger实例
+    """
+    logger = logging.getLogger(name)
+    
+    # 避免重复配置
+    if logger.handlers:
+        return logger
+    
+    logger.setLevel(logging.INFO)
+    
+    # 日志格式
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # 控制台处理器
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    
+    # 文件处理器（如果指定了日志文件）
+    if log_file:
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        
+        log_path = os.path.join(log_dir, log_file)
+        file_handler = RotatingFileHandler(
+            log_path,
+            maxBytes=10*1024*1024,  # 10MB
+            backupCount=5,
+            encoding='utf-8'
+        )
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    
+    # 防止日志传播到根logger（避免重复）
+    logger.propagate = False
+    
+    return logger
+
+# 设置第三方库日志级别
 logging.getLogger('botocore').setLevel(logging.WARNING)
 logging.getLogger('boto3').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
+
+# 为当前模块创建logger
+logger = get_logger(__name__)
 
 
 def is_safe_filename(filename: str) -> bool:

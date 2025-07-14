@@ -5,7 +5,6 @@ Strands Agent 工具集成
 """
 
 import json
-import logging
 import os
 import time
 from typing import Optional, Dict, List, Any, Callable
@@ -13,10 +12,11 @@ from dataclasses import asdict
 from strands import tool
 from ec2_sandbox.core import EC2SandboxEnv, SandboxConfig
 from ec2_sandbox.sandbox import ExecutionResult
-from ec2_sandbox.session_manager import SessionContext, create_session_context, get_session_manager
+from ec2_sandbox.session_manager import SessionContext, create_session_context
 from ec2_sandbox.tool_response import ToolResponse
+from ec2_sandbox.utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # 全局变量存储当前会话上下文
 _current_context: Optional[SessionContext] = None
@@ -164,10 +164,10 @@ def create_strands_tools(config: SandboxConfig, session_id: str) -> List[Callabl
                 stderr=str(e),
                 return_code=1,
                 execution_time=0,
-                session_id=ctx.session_id if ctx else None,
                 working_directory="",
                 files_created=[],
-                error_message=str(e)
+                error_message=str(e),
+                session_id=ctx.session_id if ctx else None
             )
             return error_result.to_json()
     
@@ -177,22 +177,23 @@ def create_strands_tools(config: SandboxConfig, session_id: str) -> List[Callabl
         task_hash: Optional[str] = None
     ) -> str:
         """
-        获取当前用户会话中的文件内容 - 支持跨任务文件访问
+        获取当前用户会话中的文件内容 - 支持精确查找, 支持跨任务文件访问
         
         Args:
-            filename: 文件名 (可选)，如果不指定则返回文件列表
-            task_hash: 任务哈希 (可选)，如果指定则只在该任务中查找
+            filename: 文件名 (可选)
+            task_hash: 任务哈希 (可选)
             
+        注意: filename 和 task_hash 至少需要提供一个参数
+        
         Returns:
-            统一格式的JSON, 包括文件内容和路径信息
+            统一格式的JSON, 包含文件内容
             
         示例用法：
-        - get_session_files() # 获取当前会话内所有文件列表
-        - get_session_files(task_hash="abc123") # 获取指定任务的所有文件
+        - get_session_files(task_hash="abc123") # 获取指定任务的所有文件内容
         - get_session_files(filename="data.csv") # 在当前会话中查找并获取特定文件内容
         - get_session_files(filename="data.csv", task_hash="abc123") # 在指定任务中获取特定文件内容
+        - 在代码中使用相对路径，如: open("../task_hash/file.txt") # 访问其他任务的文件
         """
-
         try:
             ctx = get_session_context()
             if not ctx:
@@ -200,13 +201,29 @@ def create_strands_tools(config: SandboxConfig, session_id: str) -> List[Callabl
                     error_message="会话上下文未初始化"
                 ).to_json()
             
+            # 参数验证：至少需要提供一个参数
+            if not filename and not task_hash:
+                return ToolResponse.create_error(
+                    error_message="请提供 filename 或 task_hash 参数。如需查看会话结构，请使用 list_session_structure 工具。",
+                    session_id=ctx.session_id
+                ).to_json()
+            
             session_path = ctx.session_path
             
+            # 统一的文件读取函数
+            def read_file_content(file_path: str) -> str:
+                read_command = f"cat '{file_path}'"
+                read_result = sandbox_env._execute_remote_command(read_command)
+                if read_result.get('return_code') == 0:
+                    return read_result.get('stdout', '')
+                else:
+                    return f"<读取失败: {read_result.get('stderr', 'Unknown error')}>"
+            
             if filename:
-                # 查找特定文件 - 使用 EC2 远程命令
+                # 查找特定文件
                 if task_hash:
                     # 在指定任务中查找
-                    find_command = f"find {session_path}/{task_hash} -name '{filename}' -type f 2>/dev/null"
+                    find_command = f"find {session_path}/{task_hash} -name '{filename}' -type f -maxdepth 1 2>/dev/null"
                 else:
                     # 在整个会话目录中查找
                     find_command = f"find {session_path} -name '{filename}' -type f 2>/dev/null"
@@ -215,80 +232,62 @@ def create_strands_tools(config: SandboxConfig, session_id: str) -> List[Callabl
                 
                 if find_result.get('return_code') == 0 and find_result.get('stdout', '').strip():
                     file_path = find_result['stdout'].strip().split('\n')[0]  # 取第一个匹配的文件
+                    content = read_file_content(file_path)
                     
-                    # 读取文件内容
-                    read_command = f"cat '{file_path}'"
-                    read_result = sandbox_env._execute_remote_command(read_command)
+                    # 提取任务哈希
+                    found_task = os.path.basename(os.path.dirname(file_path))
                     
-                    if read_result.get('return_code') == 0:
-                        # 提取任务哈希
-                        task_dir = os.path.basename(os.path.dirname(file_path))
-                        
-                        return ToolResponse.create_success(
-                            data={
-                                "filename": filename,
-                                "content": read_result.get('stdout', ''),
-                                "found_in_task": task_dir,
-                                "full_path": file_path
-                            },
-                            message=f"成功获取文件: {filename}",
-                            session_id=ctx.session_id
-                        ).to_json()
-                    else:
-                        return ToolResponse.create_error(
-                            error_message=f"无法读取文件: {filename}",
-                            session_id=ctx.session_id,
-                            data={"file_path": file_path}
-                        ).to_json()
+                    return ToolResponse.create_success(
+                        data={
+                            "filename": filename,
+                            "content": content,
+                            "found_in_task": found_task,
+                            "full_path": file_path
+                        },
+                        message=f"成功获取文件: {filename}",
+                        session_id=ctx.session_id
+                    ).to_json()
                 else:
+                    search_scope = f"任务 {task_hash}" if task_hash else "所有任务"
                     return ToolResponse.create_error(
-                        error_message=f"文件未找到: {filename}",
-                        session_id=ctx.session_id,
-                        data={"searched_in": session_path}
+                        error_message=f"文件未找到: {filename} (搜索范围: {search_scope})",
+                        session_id=ctx.session_id
                     ).to_json()
             
             else:
-                # 返回会话下的所有文件
-                list_dirs_command = f"find {session_path} -maxdepth 1 -type d ! -path {session_path} 2>/dev/null"
-                dirs_result = sandbox_env._execute_remote_command(list_dirs_command)
+                # 获取指定任务的所有文件内容 (task_hash 必须存在)
+                task_dir_path = f"{session_path}/{task_hash}"
                 
-                all_files = {}
+                # 检查任务目录是否存在
+                check_command = f"test -d '{task_dir_path}' && echo 'exists'"
+                check_result = sandbox_env._execute_remote_command(check_command)
                 
-                if dirs_result.get('return_code') == 0 and dirs_result.get('stdout', '').strip():
-                    task_dirs = dirs_result['stdout'].strip().split('\n')
+                if check_result.get('return_code') != 0 or 'exists' not in check_result.get('stdout', ''):
+                    return ToolResponse.create_error(
+                        error_message=f"任务目录不存在: {task_hash}",
+                        session_id=ctx.session_id,
+                        data={"task_hash": task_hash}
+                    ).to_json()
+                
+                # 列出指定任务目录中的所有文件
+                list_files_command = f"find {task_dir_path} -maxdepth 1 -type f 2>/dev/null"
+                files_result = sandbox_env._execute_remote_command(list_files_command)
+                
+                task_files = {}
+                if files_result.get('return_code') == 0 and files_result.get('stdout', '').strip():
+                    file_paths = files_result['stdout'].strip().split('\n')
                     
-                    for task_dir_path in task_dirs:
-                        task_name = os.path.basename(task_dir_path)
-                        
-                        # 列出任务目录中的所有文件
-                        list_files_command = f"find {task_dir_path} -maxdepth 1 -type f 2>/dev/null"
-                        files_result = sandbox_env._execute_remote_command(list_files_command)
-                        
-                        if files_result.get('return_code') == 0 and files_result.get('stdout', '').strip():
-                            file_paths = files_result['stdout'].strip().split('\n')
-                            task_files = {}
-                            
-                            for file_path in file_paths:
-                                file_name = os.path.basename(file_path)
-                                
-                                # 读取文件内容
-                                read_command = f"cat '{file_path}'"
-                                read_result = sandbox_env._execute_remote_command(read_command)
-                                
-                                if read_result.get('return_code') == 0:
-                                    task_files[file_name] = read_result.get('stdout', '')
-                                else:
-                                    task_files[file_name] = f"<读取失败: {read_result.get('stderr', 'Unknown error')}>"
-                            
-                            if task_files:
-                                all_files[task_name] = task_files
+                    for file_path in file_paths:
+                        file_name = os.path.basename(file_path)
+                        task_files[file_name] = read_file_content(file_path)
                 
                 return ToolResponse.create_success(
                     data={
-                        "files": all_files,
-                        "total_tasks": len(all_files)
+                        "task_hash": task_hash,
+                        "files": task_files,
+                        "total_files": len(task_files)
                     },
-                    message=f"成功获取 {len(all_files)} 个任务的文件",
+                    message=f"成功获取任务 {task_hash} 的 {len(task_files)} 个文件",
                     session_id=ctx.session_id
                 ).to_json()
                 
@@ -432,8 +431,8 @@ def create_strands_tools(config: SandboxConfig, session_id: str) -> List[Callabl
     tools_list = [
         execute_code_in_sandbox,
         get_session_files,
-        cleanup_expired_tasks,
         list_session_structure,
+        cleanup_expired_tasks,
         check_sandbox_status
     ]
     

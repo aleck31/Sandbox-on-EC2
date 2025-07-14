@@ -10,7 +10,9 @@ import base64
 from typing import Dict, Optional, List
 from dataclasses import dataclass, asdict
 from .core import EC2SandboxEnv
-from .utils import logger, generate_task_hash, sanitize_env_var, parse_file_list
+from .utils import get_logger, generate_task_hash, sanitize_env_var, parse_file_list
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -111,13 +113,11 @@ class SandboxInstance:
                         "set +e",  # 不要在错误时退出
                         f"echo '{encoded_code}' | base64 -d > {code_file}",
                         "echo '=== EXECUTION START ==='",
-                        f"timeout {self.environment.config.max_execution_time} {runtime} {code_file} 2>&1",
-                        "exit_code=$?",
+                        f"timeout {self.environment.config.max_execution_time} {runtime} {code_file}; exit_code=$?",
                         "echo '=== EXECUTION END ==='",
                         "echo \"EXIT_CODE: $exit_code\"",
                         "echo '--- FILES_CREATED ---'",
-                        "ls -la 2>/dev/null || true",
-                        "exit 0"  # 确保总是成功退出SSM命令
+                        "ls -la 2>/dev/null || true"
                     ])
                 except Exception as e:
                     raise ValueError(f"Failed to encode Python code: {e}")

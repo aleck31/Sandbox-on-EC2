@@ -4,14 +4,15 @@ EC2 Sandbox Agent - Gradio Demo (支持会话管理)
 基于 Gradio UI 的 Agent 演示，展示 Strands Agents + EC2沙盒代码执行能力
 """
 
-import gradio as gr
-from gradio import ChatMessage
 import json
 import time
 import asyncio
 import re
 from typing import List, Dict, Any, Generator, Optional
 import logging
+import argparse
+import gradio as gr
+from gradio import ChatMessage
 from strands import Agent
 from strands.models.bedrock import BedrockModel
 from config_manager import ConfigManager
@@ -621,6 +622,8 @@ def create_demo():
                     show_label=True,
                     container=True,
                     value="暂无文件信息",
+                    min_height='16vh',
+                    max_height='30vh',
                     render=False
                 )
 
@@ -643,9 +646,9 @@ def create_demo():
                 )
 
             with gr.Column(scale=1):
-                sandbox_env_info.render()
                 # 添加刷新按钮
                 refresh_btn = gr.Button("🔄 刷新状态(Sandbox)", variant="secondary")
+                sandbox_env_info.render()
                 session_info.render()
                 file_info.render()
 
@@ -676,6 +679,12 @@ def create_demo():
 
 def main():
     """主函数"""
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description='EC2 Sandbox Agent Demo')
+    parser.add_argument('--port', type=int, default=8086, help='服务器端口 (默认: 8086)')
+    parser.add_argument('--host', type=str, default='0.0.0.0', help='服务器地址 (默认: 0.0.0.0)')
+    args = parser.parse_args()
+    
     print("🚀 启动 EC2 Sandbox Agent Demo...")
     
     # 创建并启动 Demo
@@ -683,8 +692,8 @@ def main():
     
     # 启动服务
     demo.launch(
-        server_name="0.0.0.0",  # 允许外部访问
-        server_port=8086,
+        server_name=args.host,
+        server_port=args.port,
         share=False,            # 不创建公共链接
         debug=False,
         show_error=True,        # 显示错误信息

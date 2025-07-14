@@ -11,7 +11,9 @@ from typing import Dict, Any, Optional, List, TYPE_CHECKING
 if TYPE_CHECKING:
     from .sandbox import SandboxInstance
 from dataclasses import dataclass
-from .utils import logger, is_safe_filename, create_aws_client
+from .utils import get_logger, is_safe_filename, create_aws_client
+
+logger = get_logger(__name__)
 
 
 @dataclass
