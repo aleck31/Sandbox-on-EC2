@@ -72,12 +72,12 @@ def format_file_info(tool_results):
         if not session_displayed:
             session_id = result.get('session_id', 'N/A')
             if session_id != 'N/A':
-                info_lines.append(f"**🗳️ 沙盒执行结果** (sid:{session_id})")
+                info_lines.append(f"**🗳️ 沙盒工具调用** (sid:{session_id})")
                 info_lines.append("")  # 空行
                 session_displayed = True
         
         # 任务信息
-        info_lines.append(f"**📋 任务 {i+1}**")
+        info_lines.append(f"**📋 Task {i+1}**")
         
         working_directory = result.get('working_directory', '')
         task_hash = result.get('task_hash', None)
@@ -140,23 +140,64 @@ class EC2SandboxDemo:
     def __init__(self):
         """初始化 SandboxDemo"""
         self.session_manager = get_session_manager()
+        self.config_manager = ConfigManager('config.json')
         self.sandbox_config: Optional[SandboxConfig] = None
+        self.current_environment = 'sandbox-default'  # 默认环境
         self.mcp_client = None
         self.mcp_tools = []  # 存储MCP工具
         self.user_agents = {}  # 存储每个用户的 Agent 实例
+        self.session_environments = {}  # 存储每个会话使用的环境
         
         # 加载配置
         self.load_config()
         
         # 初始化MCP工具（一次性，所有session复用）
         self.setup_mcp_tools()
+    
+    def get_available_environments(self):
+        """获取可用的沙盒环境列表"""
+        try:
+            environments = self.config_manager.list_environments()
+            return environments
+        except Exception as e:
+            logger.error(f"获取环境列表失败: {e}")
+            return ['sandbox-default']
+    
+    def switch_environment(self, environment_name: str, session_id: str):
+        """切换沙盒环境（保留对话历史）"""
+        try:
+            if environment_name == self.session_environments.get(session_id):
+                return f"当前会话已在使用环境: {environment_name}"
+            
+            # 加载新环境配置
+            new_config = self.config_manager.get_sandbox_config(environment_name)
+            
+            # 如果Agent已存在，更新其工具；否则标记需要重新创建
+            if session_id in self.user_agents:
+                agent = self.user_agents[session_id]
+                # 重新创建工具绑定到新环境
+                new_sandbox_tools = create_strands_tools(new_config, session_id)
+                new_all_tools = new_sandbox_tools + self.mcp_tools
+                # 更新Agent的工具
+                agent.tools = new_all_tools
+                logger.info(f"已更新会话 {session_id} 的Agent工具到新环境")
+            
+            # 更新会话环境记录
+            self.session_environments[session_id] = environment_name
+            
+            logger.info(f"会话 {session_id} 切换到环境: {environment_name}")
+            return f"✅ 已切换到环境: {environment_name}（保留对话历史）"
+            
+        except Exception as e:
+            logger.error(f"切换环境失败: {e}")
+            return f"❌ 切换环境失败: {str(e)}"
         
-    def load_config(self):
+    def load_config(self, environment_name: str = 'sandbox-default'):
         """加载配置"""
         try:
-            config_manager = ConfigManager('config.json')
-            self.sandbox_config = config_manager.get_sandbox_config('sandbox-default')
-            logger.info("配置加载成功")
+            self.sandbox_config = self.config_manager.get_sandbox_config(environment_name)
+            self.current_environment = environment_name
+            logger.info(f"配置加载成功: {environment_name}")
         except Exception as e:
             logger.error(f"配置加载失败: {e}")
             raise
@@ -164,8 +205,7 @@ class EC2SandboxDemo:
     def setup_mcp_tools(self):
         """设置MCP工具（一次性初始化，所有session复用）"""
         try:
-            config_manager = ConfigManager('config.json')
-            mcp_settings = config_manager.get_raw_config('mcp_settings')
+            mcp_settings = self.config_manager.get_raw_config('mcp_settings')
             exa_api_key = mcp_settings.get('exa_api_key')
             
             if exa_api_key:
@@ -197,12 +237,22 @@ class EC2SandboxDemo:
         if session_id not in self.user_agents:
             logger.info(f"为会话创建新的 Agent: {session_id}")
             
+            # 获取该会话使用的环境，如果没有则使用默认环境
+            environment_name = self.session_environments.get(session_id, 'sandbox-default')
+            
             # 确保 sandbox_config 不为 None
-            if self.sandbox_config is None:
-                raise RuntimeError("沙盒配置未初始化")
+            try:
+                session_config = self.config_manager.get_sandbox_config(environment_name)
+            except Exception as e:
+                logger.error(f"获取会话环境配置失败: {e}，使用默认环境")
+                session_config = self.config_manager.get_sandbox_config('sandbox-default')
+                environment_name = 'sandbox-default'
+            
+            # 更新会话环境记录
+            self.session_environments[session_id] = environment_name
             
             # 直接使用传入的session_id（即Gradio的session_hash）
-            sandbox_tools = create_strands_tools(self.sandbox_config, session_id)
+            sandbox_tools = create_strands_tools(session_config, session_id)
             all_tools = sandbox_tools.copy()
             
             # 添加预初始化的MCP工具
@@ -226,7 +276,7 @@ class EC2SandboxDemo:
             )
             
             self.user_agents[session_id] = agent
-            logger.info(f"Agent 初始化成功，共 {len(all_tools)} 个工具")
+            logger.info(f"Agent 初始化成功，使用环境: {environment_name}，共 {len(all_tools)} 个工具")
         
         return self.user_agents[session_id]
 
@@ -241,23 +291,32 @@ class EC2SandboxDemo:
         }
         return state_emojis.get(state.lower(), '🟡')  # 默认问号
 
-    def get_sandbox_env_info(self):
+    def get_sandbox_env_info(self, request: gr.Request = None):
         """获取沙盒环境信息，包括配置和实时状态"""
-        if not self.sandbox_config:
-            return "沙盒配置未加载"
+        session_id = (request.session_hash if request else None) or f"sid-{int(time.time())}"
+        
+        # 获取当前会话使用的环境
+        environment_name = self.session_environments.get(session_id, 'sandbox-default')
         
         try:
-            config_info = f"**📦 沙盒环境信息**\n\n"
+            # 获取当前会话的环境配置
+            session_config = self.config_manager.get_sandbox_config(environment_name)
+        except Exception as e:
+            logger.error(f"获取环境配置失败: {e}")
+            return "沙盒配置加载失败"
+        
+        try:
+            config_info = f"**📦 沙盒环境** (`{environment_name}`)\n\n"
 
             # 获取实例信息
             try:
                 from ec2_sandbox.core import EC2SandboxEnv
-                sandbox_env = EC2SandboxEnv(self.sandbox_config)
+                sandbox_env = EC2SandboxEnv(session_config)
                 status = sandbox_env.check_instance_status()
             # 基本配置信息
-                config_info += f"- 🖥️ **实例类型**: `{status.get('instance_type', 'Unknown')}` (`{self.sandbox_config.instance_id}`)\n"
-                config_info += f"- 🌍 **区域**: `{self.sandbox_config.region}`\n"
-                            
+                config_info += f"- 🖥️ **实例类型**: `{status.get('instance_type', 'Unknown')}`\n"
+                config_info += f"- 🌍 **区域**: `{session_config.region}`\n"
+
                 if 'error' not in status:
                     state_emoji = self._get_state_emoji(status.get('state', 'unknown'))
                     # CPU使用率
@@ -268,22 +327,23 @@ class EC2SandboxDemo:
                     else:
                         config_info += f"- ❌ **CPU使用率**: 获取失败\n"
                 else:
-                    config_info += f"- ❌ **状态**: {status.get('error', '获取失败')}\n"
-                    
+                    logger.error(f"沙盒环境 {environment_name} 状态异常: {status.get('error', '获取失败')}")
+                    config_info += f"- ❌ **状态**: Error\n"
+
             except Exception as e:
                 logger.warning(f"获取实例状态失败: {e}")
-                config_info += f"- ⚠️ **状态**: 无法获取实时信息\n"
-            
+                config_info += f"- ❌ **状态**: Unavailable\n"
+
             # 配置信息
             config_info += f"\n**⚙️ 配置参数**\n"
             
             # 运行时支持
-            if self.sandbox_config.allowed_runtimes:
-                runtimes = ', '.join([f"`{rt}`" for rt in self.sandbox_config.allowed_runtimes])
+            if session_config.allowed_runtimes:
+                runtimes = ', '.join([f"`{rt}`" for rt in session_config.allowed_runtimes])
                 config_info += f"- 🚀 **支持运行时**: {runtimes}\n"
-            config_info += f"- 🕐 **最大执行时间**: {self.sandbox_config.max_execution_time}秒\n"
-            config_info += f"- 💾 **最大内存**: {self.sandbox_config.max_memory_mb}MB\n"
-            config_info += f"- 🧹 **清理时间**: {self.sandbox_config.cleanup_after_hours}小时"
+            config_info += f"- 🕐 **最大执行时间**: {session_config.max_execution_time}秒\n"
+            config_info += f"- 💾 **最大内存**: {session_config.max_memory_mb}MB\n"
+            config_info += f"- 🧹 **清理时间**: {session_config.cleanup_after_hours}小时"
 
             return config_info
         except Exception as e:
@@ -620,16 +680,33 @@ def create_demo():
 
     with gr.Blocks(title="EC2 Sandbox Agent Demo", css=css) as demo:
         gr.Markdown("""
-                    # 🚀 EC2 Sandbox Agent Demo
-                    **基于 Strands Agents 构建的 AI 智能助手！**
-                    
-                    本演示使用运行在 AWS EC2 实例上的代码执行环境，支持：
+            # 🚀 EC2 Sandbox Agent Demo
+            **基于 Strands Agents 构建的 AI 智能助手！**
+
+            """)
+        with gr.Row():
+            with gr.Column(scale=2):
+                gr.Markdown("""
+                    本演示使用运行在 AWS EC2 实例(支持Graviton, GPU实例)上的代码执行环境，支持：
                     - 🧑‍💻 **Python** (pandas, numpy, matplotlib, plotly, scipy等)
                         - 📊 **数据分析** (预置的数据科学工具栈)
                     - 🧑‍💻 **Node.js** (JavaScript运行时)
                     - 🛠️ **Bash/Shell** (系统脚本)
                     - 📁 **文件管理** (自动文件创建和管理)
                     """)
+
+            with gr.Column(scale=1):
+                # 沙盒环境选择器
+                with gr.Row():
+                    environment_dropdown = gr.Dropdown(
+                        choices=demo_instance.get_available_environments(),
+                        value='sandbox-default',
+                        info="🏗️ 选择要使用的沙盒环境",
+                        show_label=False
+                    )
+                    # 添加刷新按钮
+                    refresh_btn = gr.Button("🔄 刷新状态", variant="secondary")
+
         with gr.Row():
             with gr.Column(scale=2):
                 # 定义Chatbot组件
@@ -686,7 +763,7 @@ def create_demo():
                         "写一个Node.js程序计算前21个斐波那契数",
                         "查询最新的AWS区域信息并保存到JSON文件",
                         "创建一个Bash脚本来统计当前目录的文件信息",
-                        "检查GPU环境并进行简单的矩阵运算性能测试",
+                        "检查GPU环境并使用CuPy进行简单矩阵的GPU运算性能测试",
                         "创建一个简单的数据分析脚本,分析销售数据并生成数据可视化报告",
                         "从Data Science Dojo(Github)下载Titanic数据集, 用pandas进行数据分析并生成统计报告"
                     ],
@@ -694,11 +771,36 @@ def create_demo():
                 )
 
             with gr.Column(scale=1):
-                # 添加刷新按钮
-                refresh_btn = gr.Button("🔄 刷新状态(Sandbox)", variant="secondary")
                 sandbox_env_info.render()
                 session_info.render()
                 file_info.render()
+
+            # 沙盒环境切换事件处理
+            def handle_environment_switch(environment_name, request: gr.Request):
+                session_id = (request.session_hash if request else None) or f"sid-{int(time.time())}"
+                result = demo_instance.switch_environment(environment_name, session_id)
+                
+                # 获取更新后的环境信息
+                env_info = demo_instance.get_sandbox_env_info(request)
+                session_info = demo_instance.get_session_info(session_id)
+                file_info = demo_instance.get_file_info(session_id)
+                
+                # 根据结果显示不同的模态框提示
+                if "✅" in result:
+                    gr.Info(f"环境切换成功！现在使用: {environment_name}")
+                elif "❌" in result:
+                    gr.Warning(f"环境切换失败: {result}")
+                else:
+                    gr.Info(result)  # 已在使用该环境的提示
+                
+                return env_info, session_info, file_info
+
+            # 绑定环境切换事件
+            environment_dropdown.change(
+                fn=handle_environment_switch,
+                inputs=[environment_dropdown],
+                outputs=[sandbox_env_info, session_info, file_info]
+            )
 
             # 绑定刷新事件
             refresh_btn.click(
