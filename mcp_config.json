@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "ec2-sandbox": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "ec2_sandbox_mcp.server"],
+      "cwd": ".",
+      "env": {
+        "EC2_SANDBOX_CONFIG": "config.json"
+      }
+    }
+  }
+}

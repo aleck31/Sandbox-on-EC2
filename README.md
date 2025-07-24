@@ -13,7 +13,8 @@
 - 🛠️ **配置管理**：自动验证配置参数有效性，支持多环境和多种认证方式
 - 🌐 **环境变量覆盖**：支持通过环境变量动态调整配置
 - 🔒 **安全增强**：文件名安全检查、环境变量清理、路径遍历防护
-- 🤖 **Strands Agent集成**：完整支持Strands Agent工具调用
+- 🤖 **多种集成方式**：支持Strands Agent工具调用和MCP协议标准化接口
+- 🔌 **MCP协议支持**：完整的Model Context Protocol服务器实现，标准化AI工具接入
 
 **取决于沙盒环境(EC2实例)的运行时配置
 
@@ -22,10 +23,12 @@
 - **EC2SandboxEnv**: 沙盒环境实现，管理EC2实例连接和基础设施
 - **SandboxInstance**: 具体的代码执行实例，负责任务执行和文件管理
 - **ConfigManager**: 沙盒环境配置管理器，支持多环境和验证
+- **SessionManager**: 会话和任务管理
 - **Utils工具函数**: 日志配置、安全检查、AWS客户端创建、任务hash生成等
+- **Strands Tools**: 基于Strands Agents实现的沙盒工具
+- **MCP Server**: Model Context Protocol服务器，提供标准化AI工具接口
 
 **项目结构**
-
 ```
 ec2-sandbox-tool/
 ├── ec2_sandbox/           # EC2沙盒核心模块
@@ -33,10 +36,13 @@ ec2-sandbox-tool/
 │   ├── sandbox.py         # 沙盒实例管理
 │   ├── strands_tools.py   # Strands Agents工具集成
 │   └── utils.py           # 工具函数和日志配置
+├── ec2_sandbox_mcp/       # MCP服务器模块
+│   └── server.py          # FastMCP服务器实现
 ├── pyproject.toml          # uv项目配置和依赖管理
 ├── config_manager.py       # 配置管理器
 ├── config.json             # 主配置文件
 ├── config.json.template    # 配置模板
+├── mcp_config.json         # MCP客户端配置文件示例
 ├── create_sandbox_xxx.sh   # 沙盒环境自动化准备脚本
 ├── README.md               # 项目说明文档
 └── tests/                  # 测试脚本
@@ -352,6 +358,33 @@ content = sandbox.get_task_files(result.task_hash, filename="result.json")
 
 - `demo_sandbox.py`     - 沙盒工具功能演示
 - `demo_strands_agent.py`  - Strands Agents工具集成演示
+
+在沙盒功能演示中，用户请求到代码执行的完整链路：
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant UI as Gradio界面
+    participant Agent as Strands Agent
+    participant LLM as Claude模型
+    participant Tool as 沙盒工具
+    participant SSM as AWS SSM
+    participant EC2 as EC2实例
+
+    User->>UI: "用Python计算斐波那契数列"
+    UI->>Agent: 发送用户消息
+    Agent->>LLM: 处理自然语言请求
+    LLM->>Agent: 返回工具调用决策
+    Agent->>Tool: execute_code_in_sandbox()
+    Tool->>SSM: send_command API调用
+    SSM->>EC2: 执行Shell命令
+    EC2->>SSM: 返回执行结果
+    SSM->>Tool: 命令执行响应
+    Tool->>Agent: 格式化执行结果
+    Agent->>LLM: 结果处理和总结
+    LLM->>UI: 生成用户友好回复
+    UI->>User: 显示结果和文件
+```
 
 ## Strands EC2沙箱工具
 
